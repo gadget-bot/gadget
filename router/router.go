@@ -86,22 +86,29 @@ func (router Router) Can(u models.User, permissions []string) bool {
 		userGroupNames = append(userGroupNames, userGroup.Name)
 	}
 
-	for _, groupName := range permissions {
-		// If everyone is allowed, stop checking
-		if groupName == "*" {
-			isAllowed = true
-			break
-		}
-
-		// user groups _must_ be smaller than all groups
-		for _, userGroup := range userGroupNames {
-			if groupName == userGroup {
+	if isAllowed {
+		return isAllowed
+	} else if len(permissions) == 0 {
+		// if no permissions are defined, assume it is open/allow all
+		return true
+	} else {
+		for _, groupName := range permissions {
+			// If everyone is allowed, stop checking
+			if groupName == "*" {
 				isAllowed = true
 				break
 			}
-		}
-		if isAllowed {
-			break
+
+			// user groups _must_ be smaller than all groups
+			for _, userGroup := range userGroupNames {
+				if groupName == userGroup {
+					isAllowed = true
+					break
+				}
+			}
+			if isAllowed {
+				break
+			}
 		}
 	}
 	return isAllowed
