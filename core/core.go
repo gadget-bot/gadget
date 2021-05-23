@@ -208,5 +208,5 @@ func (gadget Gadget) Run() {
 		}
 	})
 	log.Print("Server listening")
-	http.ListenAndServe(":3000", nil)
+	http.ListenAndServe("0.0.0.0:3000", nil)
 }
