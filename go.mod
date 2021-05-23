@@ -7,6 +7,6 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/rs/zerolog v1.22.0
 	github.com/slack-go/slack v0.9.1
-	gorm.io/driver/mysql v1.1.0 // indirect
-	gorm.io/gorm v1.21.10 // indirect
+	gorm.io/driver/mysql v1.1.0
+	gorm.io/gorm v1.21.10
 )

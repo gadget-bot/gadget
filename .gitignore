@@ -1,2 +1,5 @@
 scripts/start_local_dev.sh
 .DS_Store
+
+tmp/*
+dist/*
