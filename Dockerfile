@@ -6,9 +6,9 @@ WORKDIR /usr/local/gadget/
 
 RUN go clean && \
     go get && \
-    go build -o dist/gadget
+    go build -ldflags "-s -w" -o dist/gadget
 
-FROM busybox
+FROM alpine
 
 COPY --from=builder /usr/local/gadget/dist/gadget /usr/local/bin/gadget
 
