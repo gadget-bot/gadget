@@ -13,6 +13,8 @@ import (
 type Route struct {
 	Name        string
 	Pattern     string
+	Description string
+	Help        string
 	Permissions []string
 }
 

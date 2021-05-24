@@ -35,6 +35,7 @@ var dbUser = os.Getenv("GADGET_DB_USER")
 var dbPass = os.Getenv("GADGET_DB_PASS")
 var dbHost = os.Getenv("GADGET_DB_HOST")
 var dbName = os.Getenv("GADGET_DB_NAME")
+var listenPort = os.Getenv("GADGET_LISTEN_PORT")
 
 var api = slack.New(slackOauthToken)
 
@@ -72,6 +73,14 @@ func getBotUuid(body []byte) (string, error) {
 		return authorizedUsers.Authoritzations[0].UserId, nil
 	} else {
 		return "", errors.New("Weird")
+	}
+}
+
+func getListenPort() string {
+	if listenPort != "" {
+		return listenPort
+	} else {
+		return "3000"
 	}
 }
 
@@ -207,6 +216,6 @@ func (gadget Gadget) Run() {
 			}
 		}
 	})
-	log.Print("Server listening")
-	http.ListenAndServe("0.0.0.0:3000", nil)
+	log.Print(fmt.Sprintf("Server listening on port %s", getListenPort()))
+	http.ListenAndServe(fmt.Sprintf(":%s", getListenPort()), nil)
 }

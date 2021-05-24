@@ -137,15 +137,20 @@ If you just want to try Gadget out, you can use the `main.go` in this repo like 
 ```sh
 #!/bin/sh
 
+# These users are global admins for Gadget
 export GADGET_GLOBAL_ADMINS="U0.....,U1....."
+# These two variables are for connecting to Slack
 export SLACK_OAUTH_TOKEN="xoxb-...."
 export SLACK_SIGNING_SECRET="a...a"
+# DB Connection details
 export GADGET_DB_USER="gadgetuser"
 export GADGET_DB_PASS="secretpassword"
-# MySQL/MariaDB host and port
 export GADGET_DB_HOST="127.0.0.1:3306"
-# DB name
 export GADGET_DB_NAME="gadget_dev"
+# The port Gadget's webhook server listens on
+export GADGET_LISTEN_PORT="3000"
 
 go run .
 ```
+
+Gadget will be listening on port 3000. You can use something like [`ngrok`](https://ngrok.com/) to expose Gadget in a way that you can configure Slack to talk to it.
