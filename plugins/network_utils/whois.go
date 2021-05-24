@@ -43,7 +43,7 @@ func queryWhois() *router.MentionRoute {
 		api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText(
-				fmt.Sprintf("```\n%s\n```\n", result)
+				fmt.Sprintf("```\n%s\n```\n", result),
 				false,
 			),
 		)
