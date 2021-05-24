@@ -283,10 +283,10 @@ func newPing(method string, URL string, count int, interval string, tlsVerify bo
 func runHTTPPing() *router.MentionRoute {
 	var pluginRoute router.MentionRoute
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "*")
-	pluginRoute.Name = "diagnostics.runHTTPPing"
-	pluginRoute.Pattern = `(?i)^httpping( (get|post|head))? <?(https?://[^\s>]+)>?( ([0-9]+)( ([0-9]+(s|ms)))?)?$`
+	pluginRoute.Name = "network_utils.runHTTPPing"
+	pluginRoute.Pattern = `(?i)^hping( (get|post|head))? <?(https?://[^\s>]+)>?( ([0-9]+)( ([0-9]+(s|ms)))?)?$`
 	pluginRoute.Description = "Sends HTTP Pings to a given URL"
-	pluginRoute.Help = "httpping [get|post|head] URL [COUNT] [INTERVAL(s|ms)]"
+	pluginRoute.Help = "hping [get|post|head] URL [COUNT] [INTERVAL(s|ms)]"
 	pluginRoute.Plugin = func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, message string) {
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
 		api.AddReaction("male-detective", msgRef)
@@ -336,5 +336,6 @@ func runHTTPPing() *router.MentionRoute {
 func GetMentionRoutes() []router.MentionRoute {
 	return []router.MentionRoute{
 		*runHTTPPing(),
+		*queryWhois(),
 	}
 }
