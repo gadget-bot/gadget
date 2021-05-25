@@ -15,7 +15,9 @@ import (
 func userInfo() *router.MentionRoute {
 	var pluginRoute router.MentionRoute
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "admins")
-	pluginRoute.Name = "groups.removeUserFromGroup"
+	pluginRoute.Name = "user_info.userInfo"
+	pluginRoute.Description = "Responds with information about a Slack user"
+	pluginRoute.Help = "who is USER"
 	pluginRoute.Pattern = `(?i)^(tell me about|who is) <@([a-z0-9]+)>[.?]?$`
 	pluginRoute.Plugin = func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, message string) {
 		re := regexp.MustCompile(pluginRoute.Pattern)

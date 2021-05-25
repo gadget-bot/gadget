@@ -29,6 +29,8 @@ func queryWhois() *router.MentionRoute {
 
 		names := strings.Split(input, "|")
 
+		var replyTS string
+
 		if len(names) > 1 {
 			input = names[1]
 		} else {
@@ -40,12 +42,19 @@ func queryWhois() *router.MentionRoute {
 			result = fmt.Sprintf("Something went wrong looking up WHOIS info for '%s': %s", input, err)
 		}
 
+		if ev.ThreadTimeStamp != "" {
+			replyTS = ev.ThreadTimeStamp
+		} else {
+			replyTS = ev.TimeStamp
+		}
+
 		api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText(
 				fmt.Sprintf("```%s```\n", result),
 				false,
 			),
+			slack.MsgOptionTS(replyTS),
 		)
 	}
 

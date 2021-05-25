@@ -55,6 +55,9 @@ func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, mes
 A `Route` can optionally provide:
 
 * a `Permissions` list (of type `[]string`) that provides a list of `Group`s that can use the `Route`. If that list is empty, not provided, or includes `"*"`, it will allow all users.
+* a `Help` (of type `string`) that explains how to access the `Route`
+* a `Description` (of type `string`) to describe what the `Route` does
+* a `Priority` (of type `int`) to inform Gadget's `Router` which `Route` to choose when more than one match (higher `Priority` wins)
 
 Let's work on a simple example. This is taken straight from our [dice-rolling example](plugins/dice/dice.go):
 
@@ -75,6 +78,8 @@ func rollD6() *router.MentionRoute {
 	var pluginRoute router.MentionRoute
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "*")
 	pluginRoute.Name = "dice.rollD6"
+	pluginRoute.Help = "roll some dice"
+	pluginRoute.Description = "Rolls two d6 dice"
 	pluginRoute.Pattern = `(?i)^roll some dice[!.]?$`
 
 	// Here is where we define what we want this plugin to do

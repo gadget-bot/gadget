@@ -16,6 +16,7 @@ type Route struct {
 	Description string
 	Help        string
 	Permissions []string
+	Priority    int
 }
 
 type MentionRoute struct {
