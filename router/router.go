@@ -2,6 +2,7 @@ package router
 
 import (
 	"regexp"
+	"sort"
 
 	"github.com/gadget-bot/gadget/models"
 
@@ -51,7 +52,19 @@ func (router Router) FindMentionRouteByName(name string) (MentionRoute, bool) {
 func (router Router) FindMentionRouteByMessage(message string) (MentionRoute, bool) {
 	var matchingRoute MentionRoute
 	foundRoute := false
-	for _, route := range router.MentionRoutes {
+	sortedRoutes := make([]MentionRoute, 0, len(router.MentionRoutes))
+
+	// Just need the Routes themselves for sorting
+	for _, value := range router.MentionRoutes {
+		sortedRoutes = append(sortedRoutes, value)
+	}
+
+	// Sort routes with highest priority first
+	sort.Slice(sortedRoutes, func(i, j int) bool {
+		return sortedRoutes[i].Priority > sortedRoutes[j].Priority
+	})
+
+	for _, route := range sortedRoutes {
 		re := regexp.MustCompile(route.Pattern)
 		if re.MatchString(message) {
 			matchingRoute = route
