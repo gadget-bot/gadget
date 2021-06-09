@@ -1,0 +1,8 @@
+build:
+  image: docker:latest
+  scripts:
+  - ./scripts/build.sh
+test:
+  image: golang:1
+  scripts:
+  - ./scripts/test.sh
