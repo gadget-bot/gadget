@@ -3,6 +3,8 @@ build:
   image: docker:latest
   scripts:
   - ./scripts/build.sh
+  only:
+  - main
 test:
   image: golang:1
   scripts:
