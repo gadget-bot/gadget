@@ -133,7 +133,7 @@ func main() {
 }
 ```
 
-That's it!
+That's it! The above actually _is_ a real plugin and lives in its [own repo](https://github.com/gadget-bot/gadget-plugin-dice). PRs welcome!
 
 ## Starting a Demo
 

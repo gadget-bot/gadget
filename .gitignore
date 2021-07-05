@@ -1,4 +1,4 @@
-scripts/start_local_dev.sh
+scripts/*local*.sh
 .DS_Store
 
 tmp/*
