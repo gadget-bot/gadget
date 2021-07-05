@@ -10,7 +10,7 @@ Note that Gadget is still very much a **work in progress**, so please don't use 
 
 Why not just use [slack-go/slack](https://github.com/slack-go/slack) or some other Golang Slack client? There don't seem to be many (maybe even _any_) good, full-featured frameworks for building bots in Golang. It's true, [slack-go/slack](https://github.com/slack-go/slack) is great. So great, in fact, that Gadget _uses_ it for talking to Slack. What [slack-go/slack](https://github.com/slack-go/slack) (and other projects, it seems) are lacking are the built-in features like permissions, a simple plugin-based approach to adding capabilities, and intuitive support for persisting data.
 
-Having a ChatBot is fine if everyone can do everything, but this isn't always the case. Being able to restrict certain capabilities in a straightforward way is a pretty important feature and seemed worth developing. It is also really handy to simplify making a bot, cutting out all the boiler-plate. Gadget is meant to solve these problems; making a bot that you can talk to is made very simple so you can get to work writing features.
+Having a ChatBot is great, but sometimes you don't want everyone to be able to do everything. Being able to restrict certain capabilities in a straightforward way is a pretty important feature and seemed worth developing. It is also really handy to simplify making a bot, cutting out all the boiler-plate. Gadget is meant to solve these problems; making a bot that you can talk to is made very simple so you can get to work writing features.
 
 ## Building your own Bot
 
@@ -59,7 +59,7 @@ A `Route` can optionally provide:
 * a `Description` (of type `string`) to describe what the `Route` does
 * a `Priority` (of type `int`) to inform Gadget's `Router` which `Route` to choose when more than one match (higher `Priority` wins)
 
-Let's work on a simple example. This is taken straight from our [dice-rolling example](plugins/dice/dice.go):
+Let's work on a simple example:
 
 ```golang
 package dice
@@ -88,7 +88,7 @@ func rollD6() *router.MentionRoute {
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
 		api.AddReaction("game_die", msgRef)
 
-		// Roll a virtual dice
+		// Roll some virtual dice
 		dice := []int{1, 2, 3, 4, 5, 6}
 		rollIndex1 := rand.Intn(len(dice))
 		rollIndex2 := rand.Intn(len(dice))
@@ -158,4 +158,4 @@ export GADGET_LISTEN_PORT="3000"
 go run .
 ```
 
-Gadget will be listening on port 3000. You can use something like [`ngrok`](https://ngrok.com/) to expose Gadget in a way that you can configure Slack to talk to it.
+Gadget will be listening on port 3000. You can use something like [`ngrok`](https://ngrok.com/) to expose Gadget in a way that you can configure Slack to talk to it. Note that it won't do much... Gadget's built-in plugins are pretty simple. This is really meant to be the core of your own bot that combines [plugins from other repos](https://github.com/search?q=org%3Agadget-bot+gadget-plugin-) (maybe even some of your own).
