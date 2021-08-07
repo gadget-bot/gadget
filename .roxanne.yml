@@ -1,8 +1,7 @@
 version: 1.0
-build:
-  image: docker:latest
-  scripts:
-  - ./scripts/build.sh
+images:
+  builds:
+  - name: "gadget:local"
   only:
   - main
 test:
