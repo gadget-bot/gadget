@@ -1,10 +1,6 @@
 version: 1.0
-images:
-  builds:
-  - name: "gadget:local"
-  only:
-  - main
-test:
-  image: golang:1
-  scripts:
-  - ./scripts/test.sh
+stages:
+- build:
+    image: docker:latest
+- test:
+    image: golang:1
