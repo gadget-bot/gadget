@@ -1,6 +1,6 @@
 version: 1.0
 stages:
-- build:
+  build:
     image: docker:latest
-- test:
+  test:
     image: golang:1
