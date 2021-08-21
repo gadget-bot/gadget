@@ -1,3 +1,4 @@
 #!/bin/sh
 
-docker build -t gadget:local .
+apk add --no-cache openssl make
+make container
