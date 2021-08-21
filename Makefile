@@ -7,6 +7,7 @@ GOARCH      ?= $(shell $(GO) env GOARCH)
 PACKAGENAME := $(shell go list -m -f '{{.Path}}')
 GOLDFLAGS   ?= -s -w -X $(PACKAGENAME)/conf.Executable=$(EXECUTABLE) -X $(PACKAGENAME)/conf.GitVersion=$(GITVERSION)
 GOBUILD     ?= CGO_ENABLED=0 $(GO) build -ldflags="$(GOLDFLAGS)"
+GO_FILES    := $(shell find . -type f -name '*.go')
 
 EXECUTABLE  := gadget
 ARTIFACT    := dist/$(GOOS)-$(GOARCH)/$(EXECUTABLE)
@@ -20,9 +21,13 @@ all: clean verify lint test build
 ###############
 ##@ Development
 
+# This is to allow make to detect when other targes should be rerun (source changes)
+$(GO_FILES):
+	@stat -c "%y %n" "$@"
+
 .PHONY: $(EXECUTABLE)
 build: $(ARTIFACT) ## Build binary
-$(ARTIFACT):
+$(ARTIFACT): $(GO_FILES)
 	@$(MAKE) --no-print-directory log-build
 	@$(GOBUILD) -o $@
 
@@ -43,7 +48,7 @@ lint:
 
 .PHONY: test
 test: coverage.out ## Execute tests
-coverage.out:
+coverage.out: $(GO_FILES)
 	@$(MAKE) --no-print-directory log-$@
 	$(GO) test -coverprofile=coverage.out -covermode=atomic -v ./...
 
