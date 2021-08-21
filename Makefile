@@ -12,8 +12,8 @@ GO_FILES    := $(shell find . -type f -name '*.go')
 EXECUTABLE  := gadget
 ARTIFACT    := dist/$(GOOS)-$(GOARCH)/$(EXECUTABLE)
 
-DB_PASS      ?= $(shell openssl rand -base64 16)
-DB_ROOT_PASS ?= $(shell openssl rand -base64 16)
+DB_PASS      ?= $(shell openssl rand -hex 16)
+DB_ROOT_PASS ?= $(shell openssl rand -hex 16)
 
 .PHONY: all
 all: clean verify lint test build
