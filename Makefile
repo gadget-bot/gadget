@@ -30,6 +30,7 @@ build: $(ARTIFACT) ## Build binary
 $(ARTIFACT): $(GO_FILES)
 	@$(MAKE) --no-print-directory log-build
 	@$(GOBUILD) -o $@
+	@ln -fs $(GOOS)-$(GOARCH)/$(EXECUTABLE) dist/$(EXECUTABLE)
 
 .PHONY: verify
 verify:   ## Verify 'vendor' dependencies

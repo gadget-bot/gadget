@@ -100,7 +100,7 @@ func stripBotMention(body string, botUuid string) string {
 	return strings.TrimSpace(strings.ReplaceAll(body, "<@"+botUuid+">", ""))
 }
 
-func Setup() *Gadget {
+func Setup() (*Gadget, error) {
 	var gadget Gadget
 
 	log.Debug().Str("globalAdmins", strings.Join(globalAdminsFromEnv(), ", ")).Msg("Pulled globalAdmins from Env")
@@ -117,7 +117,7 @@ func Setup() *Gadget {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", dbUser, dbPass, dbHost, dbName)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		panic(err)
+		return &gadget, err
 	}
 
 	var version string
@@ -139,10 +139,10 @@ func Setup() *Gadget {
 	db.Where(models.Group{Name: "globalAdmins"}).FirstOrCreate(&globalAdmins)
 	db.Model(&globalAdmins).Association("Members").Replace(globalAdminUsers)
 
-	return &gadget
+	return &gadget, nil
 }
 
-func (gadget Gadget) Run() {
+func (gadget Gadget) Run() error {
 	http.HandleFunc("/gadget", func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 
@@ -217,5 +217,5 @@ func (gadget Gadget) Run() {
 		}
 	})
 	log.Print(fmt.Sprintf("Server listening on port %s", getListenPort()))
-	http.ListenAndServe(fmt.Sprintf(":%s", getListenPort()), nil)
+	return http.ListenAndServe(fmt.Sprintf(":%s", getListenPort()), nil)
 }
