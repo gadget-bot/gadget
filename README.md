@@ -20,12 +20,17 @@ Here is what your bot's `main.go` should look like:
 package main
 
 import (
+	"os"
+
 	gadget "github.com/gadget-bot/gadget/core"
 	"github.com/gadget-bot/gadget/plugins/how"
 )
 
 func main() {
-	myBot := gadget.Setup()
+	myBot, err := gadget.Setup()
+	if err != nil {
+		os.Exit(1)
+	}
 
 	// Add your custom mention plugins here
   
@@ -121,7 +126,10 @@ From there, we can just extend the `main.go` above, changing the `func main()` t
 
 ```golang
 func main() {
-	myBot := gadget.Setup()
+	myBot, err := gadget.Setup()
+	if err != nil {
+		os.Exit(1)
+	}
 
 	// Add your custom mention plugins here
   
