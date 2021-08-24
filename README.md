@@ -12,6 +12,10 @@ Why not just use [slack-go/slack](https://github.com/slack-go/slack) or some oth
 
 Having a ChatBot is great, but sometimes you don't want everyone to be able to do everything. Being able to restrict certain capabilities in a straightforward way is a pretty important feature and seemed worth developing. It is also really handy to simplify making a bot, cutting out all the boiler-plate. Gadget is meant to solve these problems; making a bot that you can talk to is made very simple so you can get to work writing features.
 
+## Building Gadget
+
+Just run `make`. Builds are placed in `./dist`. Use `make help` to get a list of all targets.
+
 ## Building your own Bot
 
 Here is what your bot's `main.go` should look like:
