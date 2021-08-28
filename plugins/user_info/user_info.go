@@ -19,8 +19,8 @@ func userInfo() *router.MentionRoute {
 	pluginRoute.Description = "Responds with information about a Slack user"
 	pluginRoute.Help = "who is USER"
 	pluginRoute.Pattern = `(?i)^(tell me about|who is) <@([a-z0-9]+)>[.?]?$`
-	pluginRoute.Plugin = func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, message string) {
-		re := regexp.MustCompile(pluginRoute.Pattern)
+	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+		re := regexp.MustCompile(route.Pattern)
 		results := re.FindStringSubmatch(message)
 		userName := results[2]
 		var foundUser models.User
