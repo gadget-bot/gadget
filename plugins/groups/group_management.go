@@ -27,7 +27,7 @@ func getMyGroups() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "*")
 	pluginRoute.Name = "groups.getMyGroups"
 	pluginRoute.Pattern = `(?i)^((list )?my groups|which groups am I (in|a member of))[.?]?$`
-	pluginRoute.Plugin = func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, message string) {
+	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText("Here are your groups, <@"+ev.User+">:", false),
@@ -60,7 +60,7 @@ func getAllGroups() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "admins")
 	pluginRoute.Name = "groups.getAllGroups"
 	pluginRoute.Pattern = `(?i)^(list|list all|all) groups\.?$`
-	pluginRoute.Plugin = func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, message string) {
+	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		var groups []models.Group
 
 		api.PostMessage(
@@ -89,11 +89,11 @@ func addUserToGroup() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "admins")
 	pluginRoute.Name = "groups.addUserToGroup"
 	pluginRoute.Pattern = `(?i)^add <@([a-z0-9]+)> to( group)? ([a-z0-9]+)\.?$`
-	pluginRoute.Plugin = func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, message string) {
+	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
 		api.AddReaction("tada", msgRef)
 
-		re := regexp.MustCompile(pluginRoute.Pattern)
+		re := regexp.MustCompile(route.Pattern)
 		results := re.FindStringSubmatch(message)
 		userName := results[1]
 		groupName := results[3]
@@ -117,11 +117,11 @@ func removeUserFromGroup() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "admins")
 	pluginRoute.Name = "groups.removeUserFromGroup"
 	pluginRoute.Pattern = `(?i)^remove <@([a-z0-9]+)> from( group)? ([a-z0-9]+)\.?$`
-	pluginRoute.Plugin = func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, message string) {
+	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
 		api.AddReaction("slightly_frowning_face", msgRef)
 
-		re := regexp.MustCompile(pluginRoute.Pattern)
+		re := regexp.MustCompile(route.Pattern)
 		results := re.FindStringSubmatch(message)
 		userName := results[1]
 		groupName := results[3]
@@ -163,6 +163,7 @@ func removeUserFromGroup() *router.MentionRoute {
 	return &pluginRoute
 }
 
+// GetMentionRoutes Slice of all MentionRoutes
 func GetMentionRoutes() []router.MentionRoute {
 	return []router.MentionRoute{
 		*getMyGroups(),

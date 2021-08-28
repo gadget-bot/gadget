@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
+//Route The primary type used by event specific routes
 type Route struct {
 	Name        string
 	Pattern     string
@@ -20,11 +21,7 @@ type Route struct {
 	Priority    int
 }
 
-type MentionRoute struct {
-	Route
-	Plugin func(api slack.Client, router Router, ev slackevents.AppMentionEvent, message string)
-}
-
+//Router the HTTP router which handles Events from Slack
 type Router struct {
 	MentionRoutes       map[string]MentionRoute
 	DefaultMentionRoute MentionRoute
@@ -32,23 +29,27 @@ type Router struct {
 	DbConnection        *gorm.DB
 }
 
+// NewRouter returns a new Router
 func NewRouter() *Router {
 	var newRouter Router
 	newRouter.MentionRoutes = make(map[string]MentionRoute)
 	return &newRouter
 }
 
+// SetupDb migrates the shcemas
 func (router Router) SetupDb() {
 	// Migrate the schema
 	router.DbConnection.AutoMigrate(&models.Group{})
 	router.DbConnection.AutoMigrate(&models.User{})
 }
 
+// Find MentionRouteByName  Returns the named mention route
 func (router Router) FindMentionRouteByName(name string) (MentionRoute, bool) {
 	route, exists := router.MentionRoutes[name]
 	return route, exists
 }
 
+// Find MentionRouteByMessage Returns the route to execute based on the first matched Route.Pattern.
 func (router Router) FindMentionRouteByMessage(message string) (MentionRoute, bool) {
 	var matchingRoute MentionRoute
 	foundRoute := false
@@ -60,6 +61,7 @@ func (router Router) FindMentionRouteByMessage(message string) (MentionRoute, bo
 	}
 
 	// Sort routes with highest priority first
+	// TODO move this such that types Route implements Sort
 	sort.Slice(sortedRoutes, func(i, j int) bool {
 		return sortedRoutes[i].Priority > sortedRoutes[j].Priority
 	})
@@ -75,16 +77,7 @@ func (router Router) FindMentionRouteByMessage(message string) (MentionRoute, bo
 	return matchingRoute, foundRoute
 }
 
-func (router Router) AddMentionRoute(route MentionRoute) {
-	router.MentionRoutes[route.Name] = route
-}
-
-func (router Router) AddMentionRoutes(routes []MentionRoute) {
-	for _, route := range routes {
-		router.MentionRoutes[route.Name] = route
-	}
-}
-
+// Can Returns true if `u` possesses the provided permissions
 func (router Router) Can(u models.User, permissions []string) bool {
 	isAllowed := false
 	var userGroupNames []string
@@ -130,6 +123,7 @@ func (router Router) Can(u models.User, permissions []string) bool {
 	return isAllowed
 }
 
+// Execute calls the Plugin function provided
 func (route MentionRoute) Execute(api slack.Client, router Router, ev slackevents.AppMentionEvent, message string) {
-	route.Plugin(api, router, ev, message)
+	route.Plugin(router, route.Route, api, ev, message)
 }
