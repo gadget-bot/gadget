@@ -7,16 +7,23 @@ import (
 
 type MentionRoute struct {
 	Route
-	// Plugin func(api slack.Client, router *Router, ev slackevents.AppMentionEvent, message string)
 	Plugin func(router Router, route Route, api slack.Client, ev slackevents.AppMentionEvent, message string)
 }
 
-func (router Router) AddMentionRoute(route MentionRoute) {
-	router.MentionRoutes[route.Name] = route
+// mentionRoutesSortedByPriority implements Sort such that those with higher priority are first
+type mentionRoutesSortedByPriority []MentionRoute
+
+// Execute calls Plugin()
+func (route MentionRoute) Execute(api slack.Client, router Router, ev slackevents.AppMentionEvent, message string) {
+	route.Plugin(router, route.Route, api, ev, message)
 }
 
-func (router Router) AddMentionRoutes(routes []MentionRoute) {
-	for _, route := range routes {
-		router.MentionRoutes[route.Name] = route
-	}
+func (a mentionRoutesSortedByPriority) Len() int { return len(a) }
+
+func (a mentionRoutesSortedByPriority) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a mentionRoutesSortedByPriority) Less(i, j int) bool {
+	return a[i].Priority > a[j].Priority
 }
