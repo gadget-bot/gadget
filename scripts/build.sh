@@ -1,4 +1,4 @@
 #!/bin/sh
 
-apk add --no-cache openssl make
+apk add --no-cache openssl make go
 make container
