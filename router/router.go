@@ -6,8 +6,6 @@ import (
 
 	"github.com/gadget-bot/gadget/models"
 
-	"github.com/slack-go/slack"
-	"github.com/slack-go/slack/slackevents"
 	"gorm.io/gorm"
 )
 
@@ -59,12 +57,7 @@ func (router Router) FindMentionRouteByMessage(message string) (MentionRoute, bo
 	for _, value := range router.MentionRoutes {
 		sortedRoutes = append(sortedRoutes, value)
 	}
-
-	// Sort routes with highest priority first
-	// TODO move this such that types Route implements Sort
-	sort.Slice(sortedRoutes, func(i, j int) bool {
-		return sortedRoutes[i].Priority > sortedRoutes[j].Priority
-	})
+	sort.Sort(mentionRoutesSortedByPriority(sortedRoutes))
 
 	for _, route := range sortedRoutes {
 		re := regexp.MustCompile(route.Pattern)
@@ -123,7 +116,14 @@ func (router Router) Can(u models.User, permissions []string) bool {
 	return isAllowed
 }
 
-// Execute calls the Plugin function provided
-func (route MentionRoute) Execute(api slack.Client, router Router, ev slackevents.AppMentionEvent, message string) {
-	route.Plugin(router, route.Route, api, ev, message)
+// AddMentionRoute sets upserts and element into `MentionRoutes` whose key is the provided `Name` field
+func (router Router) AddMentionRoute(route MentionRoute) {
+	router.MentionRoutes[route.Name] = route
+}
+
+// AddMentionRoutes calls `AddMentionRoute()` for each element in `routes`
+func (router Router) AddMentionRoutes(routes []MentionRoute) {
+	for _, route := range routes {
+		router.AddMentionRoute(route)
+	}
 }
