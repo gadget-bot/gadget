@@ -124,6 +124,6 @@ func (router Router) AddMentionRoute(route MentionRoute) {
 // AddMentionRoutes calls `AddMentionRoute()` for each element in `routes`
 func (router Router) AddMentionRoutes(routes []MentionRoute) {
 	for _, route := range routes {
-		router.MentionRoutes[route.Name] = route
+		router.AddMentionRoute(route)
 	}
 }
