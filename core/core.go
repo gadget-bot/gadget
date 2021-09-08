@@ -144,6 +144,7 @@ func Setup() (*Gadget, error) {
 
 func (gadget Gadget) Run() error {
 	http.HandleFunc("/gadget", func(w http.ResponseWriter, r *http.Request) {
+		defer requestLog(200, *r)
 		body, err := ioutil.ReadAll(r.Body)
 
 		if err != nil {
@@ -175,8 +176,6 @@ func (gadget Gadget) Run() error {
 			return
 		}
 
-		defer requestLog(200, *r)
-
 		if eventsAPIEvent.Type == slackevents.URLVerification {
 			var res *slackevents.ChallengeResponse
 
@@ -188,12 +187,14 @@ func (gadget Gadget) Run() error {
 			w.Header().Set("Content-Type", "text")
 			w.Write([]byte(res.Challenge))
 		}
+
 		if eventsAPIEvent.Type == slackevents.CallbackEvent {
 			innerEvent := eventsAPIEvent.InnerEvent
+			myUuid, err := getBotUuid(body)
+			var currentUser models.User
+
 			switch ev := innerEvent.Data.(type) {
 			case *slackevents.AppMentionEvent:
-				myUuid, err := getBotUuid(body)
-				var currentUser models.User
 				gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: ev.User})
 
 				if err != nil {
@@ -206,12 +207,30 @@ func (gadget Gadget) Run() error {
 				if !exists {
 					route = gadget.Router.DefaultMentionRoute
 				}
+
 				if !gadget.Router.Can(currentUser, route.Permissions) {
 					log.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
 					route = gadget.Router.DeniedMentionRoute
 				}
+
 				log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
-				// run the code in its own goroutine so we can return a result to Slack quickly
+
+				go route.Execute(*api, gadget.Router, *ev, trimmedMessage)
+			case *slackevents.MessageEvent:
+				gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: ev.User})
+
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				trimmedMessage := stripBotMention(ev.Text, myUuid)
+				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
+				if !exists {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+
 				go route.Execute(*api, gadget.Router, *ev, trimmedMessage)
 			}
 		}

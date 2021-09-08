@@ -21,10 +21,11 @@ type Route struct {
 
 //Router the HTTP router which handles Events from Slack
 type Router struct {
-	MentionRoutes       map[string]MentionRoute
-	DefaultMentionRoute MentionRoute
-	DeniedMentionRoute  MentionRoute
-	DbConnection        *gorm.DB
+	MentionRoutes        map[string]MentionRoute
+	ChannelMessageRoutes map[string]ChannelMessageRoute
+	DefaultMentionRoute  MentionRoute
+	DeniedMentionRoute   MentionRoute
+	DbConnection         *gorm.DB
 }
 
 // NewRouter returns a new Router
@@ -41,13 +42,44 @@ func (router Router) SetupDb() {
 	router.DbConnection.AutoMigrate(&models.User{})
 }
 
-// Find MentionRouteByName  Returns the named mention route
+// FindChannelMessageRouteByName looks up and return the ChannelMessageRoute by the provided Name field value
+func (router Router) FindChannelMessageRouteByName(name string) (ChannelMessageRoute, bool) {
+	route, exists := router.ChannelMessageRoutes[name]
+	return route, exists
+}
+
+// FindMentionRouteByName Returns the named mention route
 func (router Router) FindMentionRouteByName(name string) (MentionRoute, bool) {
 	route, exists := router.MentionRoutes[name]
 	return route, exists
 }
 
-// Find MentionRouteByMessage Returns the route to execute based on the first matched Route.Pattern.
+// FindChannelMessageRouteByMessage Returns the ChannelMessageRoute that matches the provided message
+func (router Router) FindChannelMessageRouteByMessage(message string) (ChannelMessageRoute, bool) {
+	var matchingRoute ChannelMessageRoute
+	foundRoute := false
+	sortedRoutes := make([]ChannelMessageRoute, 0, len(router.ChannelMessageRoutes))
+
+	// Just need the Routes themselves for sorting
+	for _, value := range router.ChannelMessageRoutes {
+		sortedRoutes = append(sortedRoutes, value)
+	}
+
+	sort.Sort(channelMessageRoutesSortedByPriority(sortedRoutes))
+
+	for _, route := range sortedRoutes {
+		re := regexp.MustCompile(route.Pattern)
+		if re.MatchString(message) {
+			matchingRoute = route
+			foundRoute = true
+			break
+		}
+	}
+
+	return matchingRoute, foundRoute
+}
+
+// FindMentionRouteByMessage Returns the route to execute based on the first matched Route.Pattern.
 func (router Router) FindMentionRouteByMessage(message string) (MentionRoute, bool) {
 	var matchingRoute MentionRoute
 	foundRoute := false
@@ -125,5 +157,17 @@ func (router Router) AddMentionRoute(route MentionRoute) {
 func (router Router) AddMentionRoutes(routes []MentionRoute) {
 	for _, route := range routes {
 		router.AddMentionRoute(route)
+	}
+}
+
+// AddChannelMessageRoute sets the key for ChannelMessages key to route.Name and it's value to route
+func (router Router) AddChannelMessageRoute(route ChannelMessageRoute) {
+	router.ChannelMessageRoutes[route.Name] = route
+}
+
+// AddChannelMessageRoutes same as AddChannelMessageRoute but plural
+func (router Router) AddChannelMessageRoutes(routes []ChannelMessageRoute) {
+	for _, route := range routes {
+		router.AddChannelMessageRoute(route)
 	}
 }
