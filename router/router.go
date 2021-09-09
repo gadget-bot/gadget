@@ -32,6 +32,7 @@ type Router struct {
 func NewRouter() *Router {
 	var newRouter Router
 	newRouter.MentionRoutes = make(map[string]MentionRoute)
+	newRouter.ChannelMessageRoutes = make(map[string]ChannelMessageRoute)
 	return &newRouter
 }
 
