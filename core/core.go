@@ -191,17 +191,23 @@ func (gadget Gadget) Run() error {
 		if eventsAPIEvent.Type == slackevents.CallbackEvent {
 			innerEvent := eventsAPIEvent.InnerEvent
 			myUuid, err := getBotUuid(body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			eventUser := userFromInnerEvent(&innerEvent)
+			// Ignore all events that Gadget produces to avoid infinite loops
+			if myUuid == eventUser {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
 			var currentUser models.User
+			gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: eventUser})
 
 			switch ev := innerEvent.Data.(type) {
 			case *slackevents.AppMentionEvent:
-				gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: ev.User})
-
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-
 				trimmedMessage := stripBotMention(ev.Text, myUuid)
 				route, exists := gadget.Router.FindMentionRouteByMessage(trimmedMessage)
 				if !exists {
@@ -217,13 +223,6 @@ func (gadget Gadget) Run() error {
 
 				go route.Execute(*api, gadget.Router, *ev, trimmedMessage)
 			case *slackevents.MessageEvent:
-				gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: ev.User})
-
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-
 				trimmedMessage := stripBotMention(ev.Text, myUuid)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
 				if !exists {
