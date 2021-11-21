@@ -58,6 +58,7 @@ type EventsAPICallbackEvent struct {
 
 type Gadget struct {
 	Router router.Router
+	UID    string
 }
 
 func requestLog(code int, r http.Request) {
@@ -65,7 +66,17 @@ func requestLog(code int, r http.Request) {
 	log.Info().Str("method", r.Method).Str("code", string_code).Str("uri", r.URL.String()).Msg("")
 }
 
-func getBotUuid(body []byte) (string, error) {
+// updateUID sets the UID field if it is empty
+func (g *Gadget) updateUID(body []byte) error {
+	if g.UID != "" {
+		return nil
+	}
+	uid, err := getBotUuidFromBody(body)
+	g.UID = uid
+	return err
+}
+
+func getBotUuidFromBody(body []byte) (string, error) {
 	var authorizedUsers EventsAPICallbackEvent
 	json.Unmarshal([]byte(body), &authorizedUsers)
 
@@ -190,7 +201,7 @@ func (gadget Gadget) Run() error {
 
 		if eventsAPIEvent.Type == slackevents.CallbackEvent {
 			innerEvent := eventsAPIEvent.InnerEvent
-			myUuid, err := getBotUuid(body)
+			err := gadget.updateUID(body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -198,7 +209,7 @@ func (gadget Gadget) Run() error {
 
 			eventUser := userFromInnerEvent(&innerEvent)
 			// Ignore all events that Gadget produces to avoid infinite loops
-			if myUuid == eventUser {
+			if gadget.UID == eventUser {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -208,7 +219,7 @@ func (gadget Gadget) Run() error {
 
 			switch ev := innerEvent.Data.(type) {
 			case *slackevents.AppMentionEvent:
-				trimmedMessage := stripBotMention(ev.Text, myUuid)
+				trimmedMessage := stripBotMention(ev.Text, gadget.UID)
 				route, exists := gadget.Router.FindMentionRouteByMessage(trimmedMessage)
 				if !exists {
 					route = gadget.Router.DefaultMentionRoute
@@ -223,7 +234,7 @@ func (gadget Gadget) Run() error {
 
 				go route.Execute(*api, gadget.Router, *ev, trimmedMessage)
 			case *slackevents.MessageEvent:
-				trimmedMessage := stripBotMention(ev.Text, myUuid)
+				trimmedMessage := stripBotMention(ev.Text, gadget.UID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
 				if !exists {
 					w.WriteHeader(http.StatusNotFound)
