@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -39,52 +38,13 @@ var listenPort = os.Getenv("GADGET_LISTEN_PORT")
 
 var api = slack.New(slackOauthToken)
 
-type EventMessageAuthorization struct {
-	UserId string `json:"user_id"`
-	TeamId string `json:"team_id"`
-}
-
-// this is required because slack-go doesn't seem to provide a way to get the bot's own ID
-type EventsAPICallbackEvent struct {
-	Type            string                      `json:"type"`
-	Token           string                      `json:"token"`
-	TeamID          string                      `json:"team_id"`
-	APIAppID        string                      `json:"api_app_id"`
-	Authoritzations []EventMessageAuthorization `json:"authorizations"`
-	EventID         string                      `json:"event_id"`
-	EventTime       int                         `json:"event_time"`
-	EventContext    string                      `json:"event_context"`
-}
-
 type Gadget struct {
 	Router router.Router
-	UID    string
 }
 
 func requestLog(code int, r http.Request) {
 	string_code := strconv.Itoa(code)
 	log.Info().Str("method", r.Method).Str("code", string_code).Str("uri", r.URL.String()).Msg("")
-}
-
-// updateUID sets the UID field if it is empty
-func (g *Gadget) updateUID(body []byte) error {
-	if g.UID != "" {
-		return nil
-	}
-	uid, err := getBotUuidFromBody(body)
-	g.UID = uid
-	return err
-}
-
-func getBotUuidFromBody(body []byte) (string, error) {
-	var authorizedUsers EventsAPICallbackEvent
-	json.Unmarshal([]byte(body), &authorizedUsers)
-
-	if len(authorizedUsers.Authoritzations) > 0 {
-		return authorizedUsers.Authoritzations[0].UserId, nil
-	} else {
-		return "", errors.New("Weird")
-	}
 }
 
 func getListenPort() string {
@@ -201,7 +161,7 @@ func (gadget Gadget) Run() error {
 
 		if eventsAPIEvent.Type == slackevents.CallbackEvent {
 			innerEvent := eventsAPIEvent.InnerEvent
-			err := gadget.updateUID(body)
+			err := gadget.Router.UpdateBotUID(body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -209,7 +169,7 @@ func (gadget Gadget) Run() error {
 
 			eventUser := userFromInnerEvent(&innerEvent)
 			// Ignore all events that Gadget produces to avoid infinite loops
-			if gadget.UID == eventUser {
+			if gadget.Router.BotUID == eventUser {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -219,7 +179,7 @@ func (gadget Gadget) Run() error {
 
 			switch ev := innerEvent.Data.(type) {
 			case *slackevents.AppMentionEvent:
-				trimmedMessage := stripBotMention(ev.Text, gadget.UID)
+				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindMentionRouteByMessage(trimmedMessage)
 				if !exists {
 					route = gadget.Router.DefaultMentionRoute
@@ -234,7 +194,7 @@ func (gadget Gadget) Run() error {
 
 				go route.Execute(*api, gadget.Router, *ev, trimmedMessage)
 			case *slackevents.MessageEvent:
-				trimmedMessage := stripBotMention(ev.Text, gadget.UID)
+				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
 				if !exists {
 					w.WriteHeader(http.StatusNotFound)

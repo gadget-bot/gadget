@@ -1,6 +1,8 @@
 package router
 
 import (
+	"encoding/json"
+	"errors"
 	"regexp"
 	"sort"
 
@@ -26,6 +28,23 @@ type Router struct {
 	DefaultMentionRoute  MentionRoute
 	DeniedMentionRoute   MentionRoute
 	DbConnection         *gorm.DB
+	BotUID               string
+}
+
+// this is required because slack-go doesn't seem to provide a way to get the bot's own ID
+type EventsAPICallbackEvent struct {
+	Type            string                      `json:"type"`
+	Token           string                      `json:"token"`
+	TeamID          string                      `json:"team_id"`
+	APIAppID        string                      `json:"api_app_id"`
+	Authoritzations []EventMessageAuthorization `json:"authorizations"`
+	EventID         string                      `json:"event_id"`
+	EventTime       int                         `json:"event_time"`
+	EventContext    string                      `json:"event_context"`
+}
+type EventMessageAuthorization struct {
+	UserId string `json:"user_id"`
+	TeamId string `json:"team_id"`
 }
 
 // NewRouter returns a new Router
@@ -34,6 +53,27 @@ func NewRouter() *Router {
 	newRouter.MentionRoutes = make(map[string]MentionRoute)
 	newRouter.ChannelMessageRoutes = make(map[string]ChannelMessageRoute)
 	return &newRouter
+}
+
+// UpdateUID sets the UID field from an event body. Only updates if currently empty
+func (r *Router) UpdateBotUID(body []byte) error {
+	if r.BotUID != "" {
+		return nil
+	}
+	uid, err := getBotUidFromBody(body)
+	r.BotUID = uid
+	return err
+}
+
+func getBotUidFromBody(body []byte) (string, error) {
+	var authorizedUsers EventsAPICallbackEvent
+	json.Unmarshal([]byte(body), &authorizedUsers)
+
+	if len(authorizedUsers.Authoritzations) > 0 {
+		return authorizedUsers.Authoritzations[0].UserId, nil
+	} else {
+		return "", errors.New("Weird")
+	}
 }
 
 // SetupDb migrates the shcemas
