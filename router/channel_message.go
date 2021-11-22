@@ -11,7 +11,7 @@ type ChannelMessageRoute struct {
 	Plugin func(router Router, route Route, api slack.Client, ev slackevents.MessageEvent, message string)
 }
 
-// mentionRoutesSortedByPriority implements Sort such that those with higher priority are first
+// channelMessageRoutesSortedByPriority implements Sort such that those with higher priority are first
 type channelMessageRoutesSortedByPriority []ChannelMessageRoute
 
 // Execute calls Plugin()
