@@ -24,19 +24,22 @@ import (
 	"github.com/slack-go/slack/slackevents"
 )
 
-// Slack Bot User OAuth Access Token" which starts with "xoxb-"
-var slackOauthToken = os.Getenv("SLACK_OAUTH_TOKEN")
+var (
+	// Slack Bot User OAuth Access Token which starts with "xoxb-"
+	slackOauthToken = os.Getenv("SLACK_OAUTH_TOKEN")
 
-// Slack signing secret
-var signingSecret = os.Getenv("SLACK_SIGNING_SECRET")
+	// Slack signing secret
+	signingSecret = os.Getenv("SLACK_SIGNING_SECRET")
 
-var dbUser = os.Getenv("GADGET_DB_USER")
-var dbPass = os.Getenv("GADGET_DB_PASS")
-var dbHost = os.Getenv("GADGET_DB_HOST")
-var dbName = os.Getenv("GADGET_DB_NAME")
-var listenPort = os.Getenv("GADGET_LISTEN_PORT")
+	dbUser     = os.Getenv("GADGET_DB_USER")
+	dbPass     = os.Getenv("GADGET_DB_PASS")
+	dbHost     = os.Getenv("GADGET_DB_HOST")
+	dbName     = os.Getenv("GADGET_DB_NAME")
+	listenPort = os.Getenv("GADGET_LISTEN_PORT")
+	admins     = globalAdminsFromString(os.Getenv("GADGET_GLOBAL_ADMINS"))
 
-var api = slack.New(slackOauthToken)
+	api *slack.Client
+)
 
 type Gadget struct {
 	Router router.Router
@@ -55,10 +58,8 @@ func getListenPort() string {
 	}
 }
 
-func globalAdminsFromEnv() []string {
-	adminFromEnv := os.Getenv("GADGET_GLOBAL_ADMINS")
-
-	uuids := strings.Split(adminFromEnv, ",")
+func globalAdminsFromString(admins string) []string {
+	uuids := strings.Split(admins, ",")
 	var trimmedUuids []string
 	for _, uuid := range uuids {
 		trimmedUuids = append(trimmedUuids, strings.TrimSpace(uuid))
@@ -73,8 +74,9 @@ func stripBotMention(body string, botUuid string) string {
 
 func Setup() (*Gadget, error) {
 	var gadget Gadget
+	api = slack.New(slackOauthToken)
 
-	log.Debug().Str("globalAdmins", strings.Join(globalAdminsFromEnv(), ", ")).Msg("Pulled globalAdmins from Env")
+	log.Debug().Str("globalAdmins", strings.Join(admins, ", ")).Msg("Pulled globalAdmins")
 
 	gadget.Router = *router.NewRouter()
 
@@ -101,7 +103,7 @@ func Setup() (*Gadget, error) {
 	var globalAdmins models.Group
 	var globalAdminUsers []models.User
 
-	for _, userName := range globalAdminsFromEnv() {
+	for _, userName := range admins {
 		var user models.User
 		db.FirstOrCreate(&user, models.User{Uuid: userName})
 		globalAdminUsers = append(globalAdminUsers, user)
@@ -111,6 +113,20 @@ func Setup() (*Gadget, error) {
 	db.Model(&globalAdmins).Association("Members").Replace(globalAdminUsers)
 
 	return &gadget, nil
+}
+
+func SetupWithConfig(token, secret, databaseUser, databasePass, databaseHost, databaseName, port string, globalAdmins []string) (*Gadget, error) {
+	// quick and dirty, just override the global values which were set from ENV vars
+	slackOauthToken = token
+	admins = globalAdmins
+	signingSecret = secret
+	dbUser = databaseUser
+	dbPass = databasePass
+	dbHost = databaseHost
+	dbName = databaseName
+	listenPort = port
+
+	return Setup()
 }
 
 func (gadget Gadget) Run() error {
