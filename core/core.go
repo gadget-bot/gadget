@@ -43,6 +43,7 @@ var (
 
 type Gadget struct {
 	Router router.Router
+	Client *slack.Client
 }
 
 func requestLog(code int, r http.Request) {
@@ -75,6 +76,7 @@ func stripBotMention(body string, botUuid string) string {
 func Setup() (*Gadget, error) {
 	var gadget Gadget
 	api = slack.New(slackOauthToken)
+	gadget.Client = api
 
 	log.Debug().Str("globalAdmins", strings.Join(admins, ", ")).Msg("Pulled globalAdmins")
 
@@ -208,7 +210,7 @@ func (gadget Gadget) Run() error {
 
 				log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
 
-				go route.Execute(*api, gadget.Router, *ev, trimmedMessage)
+				go route.Execute(*gadget.Client, gadget.Router, *ev, trimmedMessage)
 			case *slackevents.MessageEvent:
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
@@ -217,7 +219,7 @@ func (gadget Gadget) Run() error {
 					return
 				}
 
-				go route.Execute(*api, gadget.Router, *ev, trimmedMessage)
+				go route.Execute(*gadget.Client, gadget.Router, *ev, trimmedMessage)
 			}
 		}
 	})
