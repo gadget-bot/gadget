@@ -164,8 +164,10 @@ func SetupWithConfig(token, secret, databaseUser, databasePass, databaseHost, da
 	return Setup()
 }
 
-func (gadget Gadget) Run() error {
-	http.HandleFunc("/gadget", func(w http.ResponseWriter, r *http.Request) {
+// Handler returns an http.Handler with all Gadget routes registered.
+func (gadget Gadget) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/gadget", func(w http.ResponseWriter, r *http.Request) {
 		statusCode := http.StatusOK
 		accessDenied := false
 		defer func() { requestLog(statusCode, *r, accessDenied) }()
@@ -245,7 +247,7 @@ func (gadget Gadget) Run() error {
 			}
 		}
 	})
-	http.HandleFunc("/gadget/command", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/gadget/command", func(w http.ResponseWriter, r *http.Request) {
 		statusCode := http.StatusOK
 		accessDenied := false
 		defer func() { requestLog(statusCode, *r, accessDenied) }()
@@ -301,6 +303,11 @@ func (gadget Gadget) Run() error {
 		}
 	})
 
+	return mux
+}
+
+func (gadget Gadget) Run() error {
+	handler := gadget.Handler()
 	log.Print(fmt.Sprintf("Server listening on port %s", getListenPort()))
-	return http.ListenAndServe(fmt.Sprintf(":%s", getListenPort()), nil)
+	return http.ListenAndServe(fmt.Sprintf(":%s", getListenPort()), handler)
 }
