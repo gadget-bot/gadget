@@ -14,7 +14,7 @@ type MentionRoute struct {
 type mentionRoutesSortedByPriority []MentionRoute
 
 // Execute calls Plugin()
-func (route MentionRoute) Execute(api slack.Client, router Router, ev slackevents.AppMentionEvent, message string) {
+func (route MentionRoute) Execute(router Router, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 	route.Plugin(router, route.Route, api, ev, message)
 }
 

@@ -204,36 +204,36 @@ func (router Router) Can(u models.User, permissions []string) bool {
 }
 
 // AddMentionRoute sets upserts and element into `MentionRoutes` whose key is the provided `Name` field
-func (router Router) AddMentionRoute(route MentionRoute) {
+func (router *Router) AddMentionRoute(route MentionRoute) {
 	router.MentionRoutes[route.Name] = route
 }
 
 // AddMentionRoutes calls `AddMentionRoute()` for each element in `routes`
-func (router Router) AddMentionRoutes(routes []MentionRoute) {
+func (router *Router) AddMentionRoutes(routes []MentionRoute) {
 	for _, route := range routes {
 		router.AddMentionRoute(route)
 	}
 }
 
 // AddChannelMessageRoute sets the key for ChannelMessages key to route.Name and it's value to route
-func (router Router) AddChannelMessageRoute(route ChannelMessageRoute) {
+func (router *Router) AddChannelMessageRoute(route ChannelMessageRoute) {
 	router.ChannelMessageRoutes[route.Name] = route
 }
 
 // AddChannelMessageRoutes same as AddChannelMessageRoute but plural
-func (router Router) AddChannelMessageRoutes(routes []ChannelMessageRoute) {
+func (router *Router) AddChannelMessageRoutes(routes []ChannelMessageRoute) {
 	for _, route := range routes {
 		router.AddChannelMessageRoute(route)
 	}
 }
 
 // AddSlashCommandRoute adds a slash command route keyed by its Name
-func (router Router) AddSlashCommandRoute(route SlashCommandRoute) {
+func (router *Router) AddSlashCommandRoute(route SlashCommandRoute) {
 	router.SlashCommandRoutes[route.Command] = route
 }
 
 // AddSlashCommandRoutes calls AddSlashCommandRoute for each element in routes
-func (router Router) AddSlashCommandRoutes(routes []SlashCommandRoute) {
+func (router *Router) AddSlashCommandRoutes(routes []SlashCommandRoute) {
 	for _, route := range routes {
 		router.AddSlashCommandRoute(route)
 	}

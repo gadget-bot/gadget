@@ -15,7 +15,7 @@ type ChannelMessageRoute struct {
 type channelMessageRoutesSortedByPriority []ChannelMessageRoute
 
 // Execute calls Plugin()
-func (route ChannelMessageRoute) Execute(api slack.Client, router Router, ev slackevents.MessageEvent, message string) {
+func (route ChannelMessageRoute) Execute(router Router, api slack.Client, ev slackevents.MessageEvent, message string) {
 	route.Plugin(router, route.Route, api, ev, message)
 }
 

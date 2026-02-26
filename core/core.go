@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -56,7 +56,7 @@ func requestLog(code int, r http.Request) {
 // and returns the body bytes. On failure it writes the appropriate HTTP status
 // and returns a non-nil error.
 func verifySlackRequest(w http.ResponseWriter, r *http.Request, statusCode *int) ([]byte, error) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		*statusCode = http.StatusBadRequest
 		w.WriteHeader(*statusCode)
@@ -227,7 +227,7 @@ func (gadget Gadget) Run() error {
 
 				log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
 
-				go route.Execute(*gadget.Client, gadget.Router, *ev, trimmedMessage)
+				go route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage)
 			case *slackevents.MessageEvent:
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
@@ -237,7 +237,7 @@ func (gadget Gadget) Run() error {
 					return
 				}
 
-				go route.Execute(*gadget.Client, gadget.Router, *ev, trimmedMessage)
+				go route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage)
 			}
 		}
 	})
@@ -251,7 +251,7 @@ func (gadget Gadget) Run() error {
 		}
 
 		// Restore body so SlashCommandParse can read it via ParseForm
-		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		cmd, err := slack.SlashCommandParse(r)
 		if err != nil {
 			statusCode = http.StatusBadRequest
@@ -278,7 +278,7 @@ func (gadget Gadget) Run() error {
 		}
 
 		log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
-		go route.Execute(*gadget.Client, gadget.Router, cmd)
+		go route.Execute(gadget.Router, *gadget.Client, cmd)
 		w.WriteHeader(http.StatusOK)
 	})
 
