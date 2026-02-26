@@ -28,8 +28,8 @@ func TestRegisteredRoutes_IncludesBothTypes(t *testing.T) {
 	for _, route := range routes {
 		types[route.Type] = true
 	}
-	assert.True(t, types["mention"])
-	assert.True(t, types["channel_message"])
+	assert.True(t, types[RouteTypeMention])
+	assert.True(t, types[RouteTypeChannelMessage])
 }
 
 func TestRegisteredRoutes_SortedByPriorityDescending(t *testing.T) {
@@ -102,5 +102,5 @@ func TestRegisteredRoutes_PreservesMetadata(t *testing.T) {
 	assert.Equal(t, "Say 'test' to test", routes[0].Help)
 	assert.Equal(t, []string{"admins"}, routes[0].Permissions)
 	assert.Equal(t, 5, routes[0].Priority)
-	assert.Equal(t, "mention", routes[0].Type)
+	assert.Equal(t, RouteTypeMention, routes[0].Type)
 }
