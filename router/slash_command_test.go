@@ -21,6 +21,6 @@ func TestSlashCommandRoute_Execute(t *testing.T) {
 		},
 	}
 
-	route.Execute(slack.Client{}, Router{}, slack.SlashCommand{})
+	route.Execute(Router{}, slack.Client{}, slack.SlashCommand{})
 	assert.True(t, pluginCalled, "expected Plugin function to be called")
 }

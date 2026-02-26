@@ -15,6 +15,6 @@ type SlashCommandRoute struct {
 }
 
 // Execute calls Plugin()
-func (route SlashCommandRoute) Execute(api slack.Client, router Router, cmd slack.SlashCommand) {
+func (route SlashCommandRoute) Execute(router Router, api slack.Client, cmd slack.SlashCommand) {
 	route.Plugin(router, route.Route, api, cmd)
 }
