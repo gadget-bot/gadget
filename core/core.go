@@ -287,8 +287,14 @@ func (gadget Gadget) Run() error {
 		}
 
 		log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
+		if route.ImmediateResponse != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(fmt.Sprintf(`{"response_type":"ephemeral","text":"%s"}`, route.ImmediateResponse)))
+		}
 		go route.Execute(gadget.Router, *gadget.Client, cmd)
-		w.WriteHeader(http.StatusOK)
+		if route.ImmediateResponse == "" {
+			w.WriteHeader(http.StatusOK)
+		}
 	})
 
 	log.Print(fmt.Sprintf("Server listening on port %s", getListenPort()))
