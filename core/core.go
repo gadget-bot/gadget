@@ -279,6 +279,7 @@ func (gadget Gadget) Run() error {
 
 		log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
 		go route.Execute(*gadget.Client, gadget.Router, cmd)
+		w.WriteHeader(http.StatusOK)
 	})
 
 	log.Print(fmt.Sprintf("Server listening on port %s", getListenPort()))
