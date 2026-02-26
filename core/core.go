@@ -116,6 +116,7 @@ func Setup() (*Gadget, error) {
 
 	gadget.Router.DefaultMentionRoute = *fallback.GetMentionRoute()
 	gadget.Router.DeniedMentionRoute = *permission_denied.GetMentionRoute()
+	gadget.Router.DeniedSlashCommandRoute = *permission_denied.GetSlashCommandRoute()
 	gadget.Router.AddMentionRoutes(groups.GetMentionRoutes())
 	gadget.Router.AddMentionRoutes(user_info.GetMentionRoutes())
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -266,7 +267,8 @@ func (gadget Gadget) Run() error {
 
 		route, exists := gadget.Router.FindSlashCommandRouteByCommand(cmd.Command)
 		if !exists {
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"response_type":"ephemeral","text":"Unknown command."}`))
 			return
 		}
 
@@ -280,6 +282,7 @@ func (gadget Gadget) Run() error {
 			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Permission denied."}`)); err != nil {
 				log.Error().Err(err).Msg("Failed to write permission denied response")
 			}
+			go gadget.Router.DeniedSlashCommandRoute.Execute(gadget.Router, *gadget.Client, cmd)
 			return
 		}
 

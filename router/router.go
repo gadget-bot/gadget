@@ -38,10 +38,11 @@ type Router struct {
 	MentionRoutes        map[string]MentionRoute
 	ChannelMessageRoutes map[string]ChannelMessageRoute
 	SlashCommandRoutes   map[string]SlashCommandRoute
-	DefaultMentionRoute  MentionRoute
-	DeniedMentionRoute   MentionRoute
-	DbConnection         *gorm.DB
-	BotUID               string
+	DefaultMentionRoute      MentionRoute
+	DeniedMentionRoute       MentionRoute
+	DeniedSlashCommandRoute  SlashCommandRoute
+	DbConnection             *gorm.DB
+	BotUID                   string
 }
 
 // this is required because slack-go doesn't seem to provide a way to get the bot's own ID
