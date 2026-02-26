@@ -24,3 +24,18 @@ func TestSlashCommandRoute_Execute(t *testing.T) {
 	route.Execute(Router{}, slack.Client{}, slack.SlashCommand{})
 	assert.True(t, pluginCalled, "expected Plugin function to be called")
 }
+
+func TestSlashCommandRoute_ImmediateResponse(t *testing.T) {
+	route := SlashCommandRoute{
+		Route: Route{
+			Name:        "deploy",
+			Description: "Deploy the app",
+		},
+		Command:           "/deploy",
+		ImmediateResponse: "Deploying...",
+		Plugin: func(router Router, route Route, api slack.Client, cmd slack.SlashCommand) {
+		},
+	}
+
+	assert.Equal(t, "Deploying...", route.ImmediateResponse)
+}
