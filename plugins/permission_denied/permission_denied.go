@@ -2,6 +2,7 @@ package permission_denied
 
 import (
 	"github.com/gadget-bot/gadget/router"
+	"github.com/rs/zerolog/log"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
@@ -18,6 +19,16 @@ func GetMentionRoute() *router.MentionRoute {
 			ev.Channel,
 			slack.MsgOptionText("I'm sorry, <@"+ev.User+">, but you're not allowed to do that.", false),
 		)
+	}
+	return &pluginRoute
+}
+
+func GetSlashCommandRoute() *router.SlashCommandRoute {
+	var pluginRoute router.SlashCommandRoute
+	pluginRoute.Permissions = append(pluginRoute.Permissions, "*")
+	pluginRoute.Name = "permission_denied"
+	pluginRoute.Plugin = func(r router.Router, route router.Route, api slack.Client, cmd slack.SlashCommand) {
+		log.Warn().Str("user", cmd.UserID).Str("command", cmd.Command).Msg("Slash command permission denied")
 	}
 	return &pluginRoute
 }
