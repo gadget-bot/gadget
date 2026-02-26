@@ -47,40 +47,40 @@ type Gadget struct {
 	Client *slack.Client
 }
 
-func requestLog(code int, r http.Request) {
+func requestLog(code int, r http.Request, denied bool) {
 	string_code := strconv.Itoa(code)
-	log.Info().Str("method", r.Method).Str("code", string_code).Str("uri", r.URL.String()).Msg("")
+	event := log.Info().Str("method", r.Method).Str("code", string_code).Str("uri", r.URL.String())
+	if denied {
+		event = event.Str("access", "denied")
+	}
+	event.Msg("")
 }
 
 // verifySlackRequest reads the request body, verifies the Slack signing secret,
 // and returns the body bytes. On failure it writes the appropriate HTTP status
 // and returns a non-nil error.
-func verifySlackRequest(w http.ResponseWriter, r *http.Request, statusCode *int) ([]byte, error) {
+func verifySlackRequest(w http.ResponseWriter, r *http.Request) ([]byte, int, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		*statusCode = http.StatusBadRequest
-		w.WriteHeader(*statusCode)
-		return nil, err
+		w.WriteHeader(http.StatusBadRequest)
+		return nil, http.StatusBadRequest, err
 	}
 
 	sv, err := slack.NewSecretsVerifier(r.Header, signingSecret)
 	if err != nil {
-		*statusCode = http.StatusUnauthorized
-		w.WriteHeader(*statusCode)
-		return nil, err
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil, http.StatusUnauthorized, err
 	}
 	if _, err := sv.Write(body); err != nil {
-		*statusCode = http.StatusInternalServerError
-		w.WriteHeader(*statusCode)
-		return nil, err
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil, http.StatusInternalServerError, err
 	}
 	if err := sv.Ensure(); err != nil {
-		*statusCode = http.StatusUnauthorized
-		w.WriteHeader(*statusCode)
-		return nil, err
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil, http.StatusUnauthorized, err
 	}
 
-	return body, nil
+	return body, http.StatusOK, nil
 }
 
 func getListenPort() string {
@@ -166,10 +166,12 @@ func SetupWithConfig(token, secret, databaseUser, databasePass, databaseHost, da
 func (gadget Gadget) Run() error {
 	http.HandleFunc("/gadget", func(w http.ResponseWriter, r *http.Request) {
 		statusCode := http.StatusOK
-		defer func() { requestLog(statusCode, *r) }()
+		accessDenied := false
+		defer func() { requestLog(statusCode, *r, accessDenied) }()
 
-		body, err := verifySlackRequest(w, r, &statusCode)
+		body, code, err := verifySlackRequest(w, r)
 		if err != nil {
+			statusCode = code
 			return
 		}
 
@@ -222,6 +224,7 @@ func (gadget Gadget) Run() error {
 
 				if !gadget.Router.Can(currentUser, route.Permissions) {
 					log.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
+					accessDenied = true
 					route = gadget.Router.DeniedMentionRoute
 				}
 
@@ -243,10 +246,12 @@ func (gadget Gadget) Run() error {
 	})
 	http.HandleFunc("/gadget/command", func(w http.ResponseWriter, r *http.Request) {
 		statusCode := http.StatusOK
-		defer func() { requestLog(statusCode, *r) }()
+		accessDenied := false
+		defer func() { requestLog(statusCode, *r, accessDenied) }()
 
-		body, err := verifySlackRequest(w, r, &statusCode)
+		body, code, err := verifySlackRequest(w, r)
 		if err != nil {
+			statusCode = code
 			return
 		}
 
@@ -270,6 +275,7 @@ func (gadget Gadget) Run() error {
 
 		if !gadget.Router.Can(currentUser, route.Permissions) {
 			log.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
+			accessDenied = true
 			w.Header().Set("Content-Type", "application/json")
 			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Permission denied."}`)); err != nil {
 				log.Error().Err(err).Msg("Failed to write permission denied response")
