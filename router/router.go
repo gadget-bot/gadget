@@ -24,18 +24,20 @@ type Route struct {
 const (
 	RouteTypeMention        = "mention"
 	RouteTypeChannelMessage = "channel_message"
+	RouteTypeSlashCommand   = "slash_command"
 )
 
 // RegisteredRoute wraps a Route with its type for introspection
 type RegisteredRoute struct {
 	Route
-	Type string // RouteTypeMention or RouteTypeChannelMessage
+	Type string // RouteTypeMention, RouteTypeChannelMessage, or RouteTypeSlashCommand
 }
 
 //Router the HTTP router which handles Events from Slack
 type Router struct {
 	MentionRoutes        map[string]MentionRoute
 	ChannelMessageRoutes map[string]ChannelMessageRoute
+	SlashCommandRoutes   map[string]SlashCommandRoute
 	DefaultMentionRoute  MentionRoute
 	DeniedMentionRoute   MentionRoute
 	DbConnection         *gorm.DB
@@ -63,6 +65,7 @@ func NewRouter() *Router {
 	var newRouter Router
 	newRouter.MentionRoutes = make(map[string]MentionRoute)
 	newRouter.ChannelMessageRoutes = make(map[string]ChannelMessageRoute)
+	newRouter.SlashCommandRoutes = make(map[string]SlashCommandRoute)
 	return &newRouter
 }
 
@@ -224,17 +227,38 @@ func (router Router) AddChannelMessageRoutes(routes []ChannelMessageRoute) {
 	}
 }
 
+// AddSlashCommandRoute adds a slash command route keyed by its Name
+func (router Router) AddSlashCommandRoute(route SlashCommandRoute) {
+	router.SlashCommandRoutes[route.Command] = route
+}
+
+// AddSlashCommandRoutes calls AddSlashCommandRoute for each element in routes
+func (router Router) AddSlashCommandRoutes(routes []SlashCommandRoute) {
+	for _, route := range routes {
+		router.AddSlashCommandRoute(route)
+	}
+}
+
+// FindSlashCommandRouteByCommand looks up a SlashCommandRoute by command name
+func (router Router) FindSlashCommandRouteByCommand(command string) (SlashCommandRoute, bool) {
+	route, exists := router.SlashCommandRoutes[command]
+	return route, exists
+}
+
 // RegisteredRoutes returns all registered routes sorted by priority (descending),
 // then by name (alphabetical). DefaultMentionRoute and DeniedMentionRoute are excluded
 // because they are stored as separate struct fields, not entries in the route maps.
 func (router Router) RegisteredRoutes() []RegisteredRoute {
-	routes := make([]RegisteredRoute, 0, len(router.MentionRoutes)+len(router.ChannelMessageRoutes))
+	routes := make([]RegisteredRoute, 0, len(router.MentionRoutes)+len(router.ChannelMessageRoutes)+len(router.SlashCommandRoutes))
 
 	for _, r := range router.MentionRoutes {
 		routes = append(routes, RegisteredRoute{Route: r.Route, Type: RouteTypeMention})
 	}
 	for _, r := range router.ChannelMessageRoutes {
 		routes = append(routes, RegisteredRoute{Route: r.Route, Type: RouteTypeChannelMessage})
+	}
+	for _, r := range router.SlashCommandRoutes {
+		routes = append(routes, RegisteredRoute{Route: r.Route, Type: RouteTypeSlashCommand})
 	}
 
 	sort.Slice(routes, func(i, j int) bool {
