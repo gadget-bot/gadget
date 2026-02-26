@@ -21,6 +21,12 @@ type Route struct {
 	Priority    int
 }
 
+// RegisteredRoute wraps a Route with its type for introspection
+type RegisteredRoute struct {
+	Route
+	Type string // "mention" or "channel_message"
+}
+
 //Router the HTTP router which handles Events from Slack
 type Router struct {
 	MentionRoutes        map[string]MentionRoute
@@ -211,4 +217,26 @@ func (router Router) AddChannelMessageRoutes(routes []ChannelMessageRoute) {
 	for _, route := range routes {
 		router.AddChannelMessageRoute(route)
 	}
+}
+
+// RegisteredRoutes returns all registered routes sorted by priority (descending),
+// then by name (alphabetical). DefaultMentionRoute and DeniedMentionRoute are excluded.
+func (router Router) RegisteredRoutes() []RegisteredRoute {
+	routes := make([]RegisteredRoute, 0, len(router.MentionRoutes)+len(router.ChannelMessageRoutes))
+
+	for _, r := range router.MentionRoutes {
+		routes = append(routes, RegisteredRoute{Route: r.Route, Type: "mention"})
+	}
+	for _, r := range router.ChannelMessageRoutes {
+		routes = append(routes, RegisteredRoute{Route: r.Route, Type: "channel_message"})
+	}
+
+	sort.Slice(routes, func(i, j int) bool {
+		if routes[i].Priority != routes[j].Priority {
+			return routes[i].Priority > routes[j].Priority
+		}
+		return routes[i].Name < routes[j].Name
+	})
+
+	return routes
 }
