@@ -115,11 +115,13 @@ func Setup() (*Gadget, error) {
 	if logLevel == "" {
 		logLevel = "info"
 	}
-	level, err := zerolog.ParseLevel(logLevel)
-	if err != nil {
+	level, parseErr := zerolog.ParseLevel(logLevel)
+	if parseErr != nil || level == zerolog.NoLevel {
+		log.Warn().Str("GADGET_LOG_LEVEL", logLevel).Msg("Invalid log level, defaulting to info")
 		level = zerolog.InfoLevel
 	}
 	zerolog.SetGlobalLevel(level)
+	log.Info().Str("level", level.String()).Msg("Log level configured")
 
 	api = slack.New(slackOauthToken)
 	gadget.Client = api
@@ -135,9 +137,14 @@ func Setup() (*Gadget, error) {
 	gadget.Router.AddMentionRoutes(user_info.GetMentionRoutes())
 
 	log.Debug().Msg("Connecting to DB...")
-	gormLogLevel := gormlogger.Warn
-	if level <= zerolog.DebugLevel {
+	var gormLogLevel gormlogger.LogLevel
+	switch {
+	case level <= zerolog.DebugLevel:
 		gormLogLevel = gormlogger.Info
+	case level <= zerolog.WarnLevel:
+		gormLogLevel = gormlogger.Warn
+	default:
+		gormLogLevel = gormlogger.Silent
 	}
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", dbUser, dbPass, dbHost, dbName)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
