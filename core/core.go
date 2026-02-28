@@ -104,9 +104,8 @@ func verifySlackRequest(w http.ResponseWriter, r *http.Request, logger zerolog.L
 func getListenPort() string {
 	if listenPort != "" {
 		return listenPort
-	} else {
-		return "3000"
 	}
+	return "3000"
 }
 
 func globalAdminsFromString(admins string) []string {
