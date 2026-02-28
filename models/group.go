@@ -1,18 +1,13 @@
 package models
 
 import (
-	"time"
-
 	"gorm.io/gorm"
 )
 
 type Group struct {
 	gorm.Model
-	ID        uint
-	Name      string `gorm:"index:,unique"`
-	Members   []User `gorm:"many2many:user_groups;"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Name    string `gorm:"index:,unique"`
+	Members []User `gorm:"many2many:user_groups;"`
 }
 
 func (g Group) HasMember(user User) bool {
