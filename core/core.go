@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -104,6 +105,21 @@ func globalAdminsFromString(admins string) []string {
 
 func stripBotMention(body string, botUuid string) string {
 	return strings.TrimSpace(strings.ReplaceAll(body, "<@"+botUuid+">", ""))
+}
+
+func safeGo(routeName string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Str("route", routeName).
+					Str("stack", string(debug.Stack())).
+					Msg("Plugin panicked")
+			}
+		}()
+		fn()
+	}()
 }
 
 func Setup() (*Gadget, error) {
@@ -241,7 +257,7 @@ func (gadget Gadget) Handler() http.Handler {
 
 				log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
 
-				go route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage)
+				safeGo(route.Name, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
 			case *slackevents.MessageEvent:
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
@@ -251,7 +267,7 @@ func (gadget Gadget) Handler() http.Handler {
 					return
 				}
 
-				go route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage)
+				safeGo(route.Name, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
 			}
 		}
 	})
@@ -292,7 +308,9 @@ func (gadget Gadget) Handler() http.Handler {
 			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Permission denied."}`)); err != nil {
 				log.Error().Err(err).Msg("Failed to write permission denied response")
 			}
-			go gadget.Router.DeniedSlashCommandRoute.Execute(gadget.Router, *gadget.Client, cmd)
+			safeGo(gadget.Router.DeniedSlashCommandRoute.Name, func() {
+				gadget.Router.DeniedSlashCommandRoute.Execute(gadget.Router, *gadget.Client, cmd)
+			})
 			return
 		}
 
@@ -305,7 +323,7 @@ func (gadget Gadget) Handler() http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(resp)
 		}
-		go route.Execute(gadget.Router, *gadget.Client, cmd)
+		safeGo(route.Name, func() { route.Execute(gadget.Router, *gadget.Client, cmd) })
 		if route.ImmediateResponse == "" {
 			w.WriteHeader(http.StatusOK)
 		}

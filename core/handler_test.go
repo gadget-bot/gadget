@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"github.com/gadget-bot/gadget/router"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
@@ -251,4 +254,27 @@ func TestCommandHandler_ValidCommandReachesPermissionCheck(t *testing.T) {
 	}()
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestSafeGo_RecoversPanic(t *testing.T) {
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&buf)
+	defer func() { log.Logger = origLogger }()
+
+	done := make(chan struct{})
+	safeGo("panicking-route", func() {
+		defer func() { close(done) }()
+		panic("test panic")
+	})
+
+	// Wait for the goroutine's deferred close, then give the recover
+	// handler time to log before checking output.
+	<-done
+	time.Sleep(50 * time.Millisecond)
+
+	output := buf.String()
+	assert.Contains(t, output, "Plugin panicked")
+	assert.Contains(t, output, "panicking-route")
+	assert.Contains(t, output, "test panic")
 }
