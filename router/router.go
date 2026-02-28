@@ -78,8 +78,11 @@ func (r *Router) UpdateBotUID(body []byte) error {
 		return nil
 	}
 	uid, err := getBotUidFromBody(body)
+	if err != nil {
+		return err
+	}
 	r.BotUID = uid
-	return err
+	return nil
 }
 
 func getBotUidFromBody(body []byte) (string, error) {

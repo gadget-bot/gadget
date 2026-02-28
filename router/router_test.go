@@ -6,6 +6,37 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestUpdateBotUID_ValidBody(t *testing.T) {
+	r := NewRouter()
+	body := []byte(`{"authorizations":[{"user_id":"U_BOT","team_id":"T123"}]}`)
+	err := r.UpdateBotUID(body)
+	assert.NoError(t, err)
+	assert.Equal(t, "U_BOT", r.BotUID)
+}
+
+func TestUpdateBotUID_InvalidJSON(t *testing.T) {
+	r := NewRouter()
+	err := r.UpdateBotUID([]byte(`not json`))
+	assert.Error(t, err)
+	assert.Empty(t, r.BotUID)
+}
+
+func TestUpdateBotUID_MissingAuthorizations(t *testing.T) {
+	r := NewRouter()
+	err := r.UpdateBotUID([]byte(`{"authorizations":[]}`))
+	assert.Error(t, err)
+	assert.Empty(t, r.BotUID)
+}
+
+func TestUpdateBotUID_AlreadySet(t *testing.T) {
+	r := NewRouter()
+	r.BotUID = "U_EXISTING"
+	body := []byte(`{"authorizations":[{"user_id":"U_NEW","team_id":"T123"}]}`)
+	err := r.UpdateBotUID(body)
+	assert.NoError(t, err)
+	assert.Equal(t, "U_EXISTING", r.BotUID)
+}
+
 func TestRegisteredRoutes_Empty(t *testing.T) {
 	r := NewRouter()
 	routes := r.RegisteredRoutes()
