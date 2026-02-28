@@ -264,3 +264,114 @@ func TestRemoveUserFromGroup_NonexistentGroup(t *testing.T) {
 
 	assert.Contains(t, postedMessage, "couldn't find a group")
 }
+
+func TestGetAllGroups_PostsAllGroups(t *testing.T) {
+	db := setupGroupTestDB(t)
+
+	// Create some groups
+	db.Create(&models.Group{Name: "admins"})
+	db.Create(&models.Group{Name: "deployers"})
+	db.Create(&models.Group{Name: "viewers"})
+
+	var messages []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/chat.postMessage" {
+			r.ParseForm()
+			messages = append(messages, r.FormValue("text"))
+		}
+		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+	}))
+	defer server.Close()
+
+	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
+
+	route := getAllGroups()
+	r := router.Router{DbConnection: db}
+	ev := slackevents.AppMentionEvent{
+		User:    "U_ADMIN",
+		Channel: "C123",
+	}
+
+	route.Plugin(r, route.Route, *api, ev, "list all groups")
+
+	assert.GreaterOrEqual(t, len(messages), 2)
+	assert.Contains(t, messages[1], "admins")
+	assert.Contains(t, messages[1], "deployers")
+	assert.Contains(t, messages[1], "viewers")
+}
+
+func TestAddUserToGroup_UserAlreadyInGroup(t *testing.T) {
+	db := setupGroupTestDB(t)
+
+	// Pre-create user and group with membership
+	user := models.User{Uuid: "u123"}
+	db.Create(&user)
+	group := models.Group{Name: "deployers"}
+	db.Create(&group)
+	db.Model(&group).Association("Members").Append(&user)
+
+	var postedMessage string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/chat.postMessage" {
+			r.ParseForm()
+			postedMessage = r.FormValue("text")
+		}
+		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+	}))
+	defer server.Close()
+
+	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
+
+	route := addUserToGroup()
+	r := router.Router{DbConnection: db}
+	ev := slackevents.AppMentionEvent{
+		User:      "U_ADMIN",
+		Channel:   "C123",
+		TimeStamp: "1234567890.123456",
+	}
+
+	route.Plugin(r, route.Route, *api, ev, "add <@u123> to deployers")
+
+	// Should still report success (idempotent)
+	assert.Contains(t, postedMessage, "successfully added")
+
+	// Verify user is still in group exactly once
+	var updatedGroup models.Group
+	db.Preload("Members").Where("name = ?", "deployers").First(&updatedGroup)
+	assert.Equal(t, 1, len(updatedGroup.Members))
+}
+
+func TestRemoveUserFromGroup_UserNotAMember(t *testing.T) {
+	db := setupGroupTestDB(t)
+
+	// Create group and user but don't add user to group
+	db.Create(&models.User{Uuid: "u123"})
+	db.Create(&models.Group{Name: "deployers"})
+
+	var postedMessage string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/chat.postMessage" {
+			r.ParseForm()
+			postedMessage = r.FormValue("text")
+		}
+		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+	}))
+	defer server.Close()
+
+	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
+
+	route := removeUserFromGroup()
+	r := router.Router{DbConnection: db}
+	ev := slackevents.AppMentionEvent{
+		User:      "U_ADMIN",
+		Channel:   "C123",
+		TimeStamp: "1234567890.123456",
+	}
+
+	route.Plugin(r, route.Route, *api, ev, "remove <@u123> from deployers")
+
+	assert.Contains(t, postedMessage, "doesn't look like")
+}
