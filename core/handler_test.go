@@ -1,23 +1,40 @@
 package core
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gadget-bot/gadget/router"
+	"github.com/rs/zerolog"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
 )
+
+// signalWriter wraps an io.Writer and signals a channel on the first write.
+type signalWriter struct {
+	io.Writer
+	once   sync.Once
+	signal chan struct{}
+}
+
+func (w *signalWriter) Write(p []byte) (int, error) {
+	n, err := w.Writer.Write(p)
+	w.once.Do(func() { close(w.signal) })
+	return n, err
+}
 
 const testSecret = "test-signing-secret"
 
@@ -251,4 +268,28 @@ func TestCommandHandler_ValidCommandReachesPermissionCheck(t *testing.T) {
 	}()
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestSafeGo_RecoversPanic(t *testing.T) {
+	var buf bytes.Buffer
+	logged := make(chan struct{})
+	w := &signalWriter{Writer: &buf, signal: logged}
+
+	logger := zerolog.New(w).With().Str("request_id", "test-request-id").Logger()
+
+	safeGo("panicking-route", logger, func() {
+		panic("test panic")
+	})
+
+	select {
+	case <-logged:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for panic recovery log")
+	}
+
+	output := buf.String()
+	assert.Contains(t, output, "Plugin panicked")
+	assert.Contains(t, output, "panicking-route")
+	assert.Contains(t, output, "test panic")
+	assert.Contains(t, output, "test-request-id")
 }
