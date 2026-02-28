@@ -195,8 +195,11 @@ func Setup() (*Gadget, error) {
 	if err != nil {
 		return &gadget, err
 	}
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(5)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(3 * time.Minute)
+	log.Debug().Int("maxOpenConns", 10).Int("maxIdleConns", 5).Msg("DB connection pool configured")
 
 	var version string
 	db.Raw("SELECT VERSION() as version").Scan(&version)

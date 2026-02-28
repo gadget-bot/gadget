@@ -2,7 +2,7 @@ package user_info
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"regexp"
 
 	"github.com/gadget-bot/gadget/models"
@@ -42,7 +42,7 @@ func userInfo() *router.MentionRoute {
 			"Polar Bear",
 		}
 
-		randomIndex := rand.Intn(len(animals))
+		randomIndex := rand.IntN(len(animals))
 		randomAnimal := animals[randomIndex]
 
 		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
