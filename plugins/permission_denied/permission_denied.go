@@ -23,6 +23,16 @@ func GetMentionRoute() *router.MentionRoute {
 	return &pluginRoute
 }
 
+func GetChannelMessageRoute() *router.ChannelMessageRoute {
+	var pluginRoute router.ChannelMessageRoute
+	pluginRoute.Permissions = append(pluginRoute.Permissions, "*")
+	pluginRoute.Name = "permission_denied"
+	pluginRoute.Plugin = func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
+		log.Warn().Str("user", ev.User).Str("channel", ev.Channel).Msg("Channel message permission denied")
+	}
+	return &pluginRoute
+}
+
 func GetSlashCommandRoute() *router.SlashCommandRoute {
 	var pluginRoute router.SlashCommandRoute
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "*")

@@ -110,12 +110,17 @@ func getListenPort() string {
 }
 
 func globalAdminsFromString(admins string) []string {
+	if admins == "" {
+		return []string{}
+	}
 	uuids := strings.Split(admins, ",")
 	var trimmedUuids []string
 	for _, uuid := range uuids {
-		trimmedUuids = append(trimmedUuids, strings.TrimSpace(uuid))
+		trimmed := strings.TrimSpace(uuid)
+		if trimmed != "" {
+			trimmedUuids = append(trimmedUuids, trimmed)
+		}
 	}
-
 	return trimmedUuids
 }
 
@@ -163,6 +168,7 @@ func Setup() (*Gadget, error) {
 
 	gadget.Router.DefaultMentionRoute = *fallback.GetMentionRoute()
 	gadget.Router.DeniedMentionRoute = *permission_denied.GetMentionRoute()
+	gadget.Router.DeniedChannelMessageRoute = *permission_denied.GetChannelMessageRoute()
 	gadget.Router.DeniedSlashCommandRoute = *permission_denied.GetSlashCommandRoute()
 	gadget.Router.AddMentionRoutes(groups.GetMentionRoutes())
 	gadget.Router.AddMentionRoutes(user_info.GetMentionRoutes())
@@ -308,9 +314,15 @@ func (gadget Gadget) Handler() http.Handler {
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
 				if !exists {
-					statusCode = http.StatusNotFound
+					statusCode = http.StatusOK
 					w.WriteHeader(statusCode)
 					return
+				}
+
+				if !gadget.Router.Can(currentUser, route.Permissions) {
+					logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
+					accessDenied = true
+					route = gadget.Router.DeniedChannelMessageRoute
 				}
 
 				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
