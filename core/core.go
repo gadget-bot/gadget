@@ -114,7 +114,7 @@ func globalAdminsFromString(admins string) []string {
 		return []string{}
 	}
 	uuids := strings.Split(admins, ",")
-	var trimmedUuids []string
+	trimmedUuids := []string{}
 	for _, uuid := range uuids {
 		trimmed := strings.TrimSpace(uuid)
 		if trimmed != "" {

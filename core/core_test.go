@@ -23,7 +23,7 @@ func TestGlobalAdminsFromString(t *testing.T) {
 		{"multiple values", "U123,U456,U789", []string{"U123", "U456", "U789"}},
 		{"values with whitespace", " U123 , U456 , U789 ", []string{"U123", "U456", "U789"}},
 		{"trailing comma", "U123,U456,", []string{"U123", "U456"}},
-		{"only commas", ",,", nil},
+		{"only commas", ",,", []string{}},
 	}
 
 	for _, tt := range tests {
