@@ -8,19 +8,10 @@ import (
 	"github.com/gadget-bot/gadget/models"
 	"github.com/gadget-bot/gadget/router"
 
-	"github.com/rs/zerolog/log"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"gorm.io/gorm"
 )
-
-func findGroup(router router.Router, name string) (models.Group, error) {
-	var foundGroup models.Group
-	result := router.DbConnection.First(&foundGroup)
-	log.Debug().Str("group", foundGroup.Name).Msg("Group lookup")
-
-	return foundGroup, result.Error
-}
 
 func getMyGroups() *router.MentionRoute {
 	var pluginRoute router.MentionRoute
