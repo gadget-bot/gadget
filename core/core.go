@@ -335,6 +335,9 @@ func (gadget Gadget) Handler() http.Handler {
 			})
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to marshal immediate response")
+				statusCode = http.StatusInternalServerError
+				w.WriteHeader(statusCode)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(resp)
