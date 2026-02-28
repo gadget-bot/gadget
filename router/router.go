@@ -73,6 +73,9 @@ func NewRouter() *Router {
 }
 
 // UpdateBotUID sets the BotUID field from an event body. Only updates if currently empty.
+//
+// Note: BotUID is effectively set-once; no synchronization is needed
+// because concurrent calls with valid bodies will all set the same value.
 func (r *Router) UpdateBotUID(body []byte) error {
 	if r.BotUID != "" {
 		return nil
@@ -97,7 +100,7 @@ func getBotUidFromBody(body []byte) (string, error) {
 	return "", errors.New("no authorized users in event body")
 }
 
-// SetupDb migrates the shcemas
+// SetupDb migrates the schemas
 func (router Router) SetupDb() {
 	// Migrate the schema
 	router.DbConnection.AutoMigrate(&models.Group{})
