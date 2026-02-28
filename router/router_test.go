@@ -3,6 +3,8 @@ package router
 import (
 	"testing"
 
+	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -204,4 +206,100 @@ func TestRegisteredRoutes_PreservesMetadata(t *testing.T) {
 	assert.Equal(t, []string{"admins"}, routes[0].Permissions)
 	assert.Equal(t, 5, routes[0].Priority)
 	assert.Equal(t, RouteTypeMention, routes[0].Type)
+}
+
+func TestAddMentionRoute_CompilesPattern(t *testing.T) {
+	r := NewRouter()
+	r.AddMentionRoute(MentionRoute{
+		Route: Route{Name: "test", Pattern: `(?i)^hello`},
+	})
+	route := r.MentionRoutes["test"]
+	assert.NotNil(t, route.CompiledPattern)
+	assert.True(t, route.CompiledPattern.MatchString("Hello world"))
+	assert.False(t, route.CompiledPattern.MatchString("goodbye"))
+}
+
+func TestAddMentionRoute_EmptyPatternNilCompiled(t *testing.T) {
+	r := NewRouter()
+	r.AddMentionRoute(MentionRoute{
+		Route: Route{Name: "no-pattern"},
+	})
+	route := r.MentionRoutes["no-pattern"]
+	assert.Nil(t, route.CompiledPattern)
+}
+
+func TestAddMentionRoute_InvalidPatternPanics(t *testing.T) {
+	r := NewRouter()
+	assert.Panics(t, func() {
+		r.AddMentionRoute(MentionRoute{
+			Route: Route{Name: "bad", Pattern: `(?P<invalid`},
+		})
+	})
+}
+
+func TestAddChannelMessageRoute_CompilesPattern(t *testing.T) {
+	r := NewRouter()
+	r.AddChannelMessageRoute(ChannelMessageRoute{
+		Route: Route{Name: "test", Pattern: `(?i)^deploy`},
+	})
+	route := r.ChannelMessageRoutes["test"]
+	assert.NotNil(t, route.CompiledPattern)
+	assert.True(t, route.CompiledPattern.MatchString("deploy production"))
+}
+
+func TestAddChannelMessageRoute_InvalidPatternPanics(t *testing.T) {
+	r := NewRouter()
+	assert.Panics(t, func() {
+		r.AddChannelMessageRoute(ChannelMessageRoute{
+			Route: Route{Name: "bad", Pattern: `[invalid`},
+		})
+	})
+}
+
+func TestAddSlashCommandRoute_CompilesPattern(t *testing.T) {
+	r := NewRouter()
+	r.AddSlashCommandRoute(SlashCommandRoute{
+		Route:   Route{Name: "deploy", Pattern: `(?i)^production`},
+		Command: "/deploy",
+	})
+	route := r.SlashCommandRoutes["/deploy"]
+	assert.NotNil(t, route.CompiledPattern)
+}
+
+func TestFindMentionRouteByMessage_UsesCompiledPattern(t *testing.T) {
+	r := NewRouter()
+	r.AddMentionRoute(MentionRoute{
+		Route: Route{Name: "greet", Pattern: `(?i)^hello`, Priority: 1},
+		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {},
+	})
+	r.AddMentionRoute(MentionRoute{
+		Route: Route{Name: "farewell", Pattern: `(?i)^goodbye`, Priority: 1},
+		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {},
+	})
+
+	route, found := r.FindMentionRouteByMessage("Hello there")
+	assert.True(t, found)
+	assert.Equal(t, "greet", route.Name)
+
+	route, found = r.FindMentionRouteByMessage("goodbye friend")
+	assert.True(t, found)
+	assert.Equal(t, "farewell", route.Name)
+
+	_, found = r.FindMentionRouteByMessage("something else")
+	assert.False(t, found)
+}
+
+func TestFindChannelMessageRouteByMessage_UsesCompiledPattern(t *testing.T) {
+	r := NewRouter()
+	r.AddChannelMessageRoute(ChannelMessageRoute{
+		Route: Route{Name: "deploy", Pattern: `(?i)^deploy`, Priority: 1},
+		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.MessageEvent, message string) {},
+	})
+
+	route, found := r.FindChannelMessageRouteByMessage("deploy production")
+	assert.True(t, found)
+	assert.Equal(t, "deploy", route.Name)
+
+	_, found = r.FindChannelMessageRouteByMessage("rollback")
+	assert.False(t, found)
 }
