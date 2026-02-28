@@ -1,6 +1,7 @@
 package permission_denied
 
 import (
+	"github.com/gadget-bot/gadget/plugins/helpers"
 	"github.com/gadget-bot/gadget/router"
 	"github.com/rs/zerolog/log"
 
@@ -14,11 +15,10 @@ func GetMentionRoute() *router.MentionRoute {
 	pluginRoute.Name = "permission_denied"
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		log.Warn().Str("user", ev.User).Str("channel", ev.Channel).Msg("Mention permission denied")
-		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
-		api.AddReaction("astonished", msgRef)
-		api.PostMessage(
-			ev.Channel,
+		helpers.AddReaction(api, ev.Channel, "permission_denied", "astonished", ev.TimeStamp)
+		helpers.PostMessage(api, ev.Channel, "permission_denied",
 			slack.MsgOptionText("I'm sorry, <@"+ev.User+">, but you're not allowed to do that.", false),
+			helpers.ThreadReplyOption(ev.ThreadTimeStamp),
 		)
 	}
 	return &pluginRoute
@@ -30,11 +30,10 @@ func GetChannelMessageRoute() *router.ChannelMessageRoute {
 	pluginRoute.Name = "permission_denied"
 	pluginRoute.Plugin = func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
 		log.Warn().Str("user", ev.User).Str("channel", ev.Channel).Msg("Channel message permission denied")
-		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
-		api.AddReaction("astonished", msgRef)
-		api.PostMessage(
-			ev.Channel,
+		helpers.AddReaction(api, ev.Channel, "permission_denied", "astonished", ev.TimeStamp)
+		helpers.PostMessage(api, ev.Channel, "permission_denied",
 			slack.MsgOptionText("I'm sorry, <@"+ev.User+">, but you're not allowed to do that.", false),
+			helpers.ThreadReplyOption(ev.ThreadTimeStamp),
 		)
 	}
 	return &pluginRoute

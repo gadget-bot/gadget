@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/gadget-bot/gadget/models"
+	"github.com/gadget-bot/gadget/plugins/helpers"
 	"github.com/gadget-bot/gadget/router"
 
 	"github.com/slack-go/slack"
@@ -46,11 +47,13 @@ func userInfo() *router.MentionRoute {
 
 		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
 
+		threadOpt := helpers.ThreadReplyOption(ev.ThreadTimeStamp)
+
 		slackInfo := foundUser.Info(api)
 		if slackInfo == nil {
-			api.PostMessage(
-				ev.Channel,
+			helpers.PostMessage(api, ev.Channel, "user_info",
 				slack.MsgOptionText(fmt.Sprintf("Sorry, I couldn't look up info for <@%s>.", userName), false),
+				threadOpt,
 			)
 			return
 		}
@@ -60,9 +63,9 @@ func userInfo() *router.MentionRoute {
 		response += fmt.Sprintf("- *Locale:* %s\n", slackInfo.Locale)
 		response += fmt.Sprintf("- *Spirit Animal:* %s\n", randomAnimal)
 
-		api.PostMessage(
-			ev.Channel,
+		helpers.PostMessage(api, ev.Channel, "user_info",
 			slack.MsgOptionText(response, false),
+			threadOpt,
 		)
 	}
 	return &pluginRoute
