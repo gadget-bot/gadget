@@ -195,6 +195,8 @@ func Setup() (*Gadget, error) {
 	if err != nil {
 		return &gadget, err
 	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(5)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(3 * time.Minute)
 
