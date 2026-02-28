@@ -19,10 +19,12 @@ make stop-db      # Stop local MariaDB container
 make tools        # Install dev tools (golint)
 ```
 
-Run a single test:
+Run a single test (no make target exists for this):
 ```bash
 go test -v ./router/ -run TestFunctionName
 ```
+
+**Always prefer `make` targets over calling `go` commands directly.** The Makefile ensures consistent flags, ldflags, and environment settings. Only fall back to raw `go` commands when no suitable make target exists (e.g., running a single test).
 
 ## Architecture
 
@@ -74,3 +76,10 @@ Environment variables: `SLACK_OAUTH_TOKEN`, `SLACK_SIGNING_SECRET`, `GADGET_GLOB
 - Route plugin execution is always async (goroutines)
 - GORM `FirstOrCreate` pattern for safe upserts
 - Feature branch + PR merge workflow
+
+## GitHub Issues
+
+When opening issues for this project (or related projects like Penny):
+- Always apply an issue type and the best fitting label
+- Scan existing issues to identify relationships (sub-issues, duplicates, related issues)
+- Ask before changing existing relationships
