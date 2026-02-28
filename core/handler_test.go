@@ -16,11 +16,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gadget-bot/gadget/models"
 	"github.com/gadget-bot/gadget/router"
 	"github.com/rs/zerolog"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // signalWriter wraps an io.Writer and signals a channel on the first write.
@@ -50,18 +54,34 @@ func signRequest(r *http.Request, body string) {
 	r.Header.Set("X-Slack-Signature", sig)
 }
 
-func newTestGadget() Gadget {
+// setupTestDB creates an in-memory SQLite database with migrated schemas.
+func setupTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("Failed to open in-memory SQLite: %v", err)
+	}
+	db.AutoMigrate(&models.Group{}, &models.User{})
+	return db
+}
+
+func newTestGadget(t *testing.T) Gadget {
+	t.Helper()
 	signingSecret = testSecret
-	return Gadget{
+	g := Gadget{
 		Router: *router.NewRouter(),
 		Client: slack.New("xoxb-fake"),
 	}
+	g.Router.DbConnection = setupTestDB(t)
+	return g
 }
 
 // --- /gadget handler tests ---
 
 func TestGadgetHandler_URLVerification(t *testing.T) {
-	g := newTestGadget()
+	g := newTestGadget(t)
 	handler := g.Handler()
 
 	challenge := "test-challenge-token"
@@ -79,7 +99,7 @@ func TestGadgetHandler_URLVerification(t *testing.T) {
 }
 
 func TestGadgetHandler_InvalidSignature(t *testing.T) {
-	g := newTestGadget()
+	g := newTestGadget(t)
 	handler := g.Handler()
 
 	body := `{"type":"url_verification","challenge":"abc"}`
@@ -94,14 +114,16 @@ func TestGadgetHandler_InvalidSignature(t *testing.T) {
 }
 
 func TestGadgetHandler_CallbackEventReachesRouting(t *testing.T) {
-	g := newTestGadget()
+	g := newTestGadget(t)
 
+	pluginCalled := make(chan struct{})
 	g.Router.AddMentionRoute(router.MentionRoute{
 		Route: router.Route{
 			Name:    "test-route",
 			Pattern: `(?i)^hello`,
 		},
 		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+			close(pluginCalled)
 		},
 	})
 	g.Router.BotUID = "U_BOT"
@@ -133,25 +155,28 @@ func TestGadgetHandler_CallbackEventReachesRouting(t *testing.T) {
 	signRequest(req, bodyStr)
 	rr := httptest.NewRecorder()
 
-	// Panics on DbConnection.FirstOrCreate (no DB configured), confirming the handler
-	// successfully verified the signature, parsed the event, and reached routing logic.
-	func() {
-		defer func() { recover() }()
-		handler.ServeHTTP(rr, req)
-	}()
+	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+
+	select {
+	case <-pluginCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for plugin to be called")
+	}
 }
 
 func TestGadgetHandler_ChannelMessageRouting(t *testing.T) {
-	g := newTestGadget()
+	g := newTestGadget(t)
 
+	pluginCalled := make(chan struct{})
 	g.Router.AddChannelMessageRoute(router.ChannelMessageRoute{
 		Route: router.Route{
 			Name:    "test-channel",
 			Pattern: `(?i)^deploy`,
 		},
 		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
+			close(pluginCalled)
 		},
 	})
 	g.Router.BotUID = "U_BOT"
@@ -184,17 +209,21 @@ func TestGadgetHandler_ChannelMessageRouting(t *testing.T) {
 	signRequest(req, bodyStr)
 	rr := httptest.NewRecorder()
 
-	func() {
-		defer func() { recover() }()
-		handler.ServeHTTP(rr, req)
-	}()
+	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+
+	select {
+	case <-pluginCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for plugin to be called")
+	}
 }
 
 func TestGadgetHandler_ChannelMessagePermissionDenied(t *testing.T) {
-	g := newTestGadget()
+	g := newTestGadget(t)
 
+	restrictedCalled := make(chan struct{})
 	g.Router.AddChannelMessageRoute(router.ChannelMessageRoute{
 		Route: router.Route{
 			Name:        "restricted-channel",
@@ -202,7 +231,7 @@ func TestGadgetHandler_ChannelMessagePermissionDenied(t *testing.T) {
 			Permissions: []string{"deployers"},
 		},
 		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
-			t.Error("Plugin should not have been called for unauthorized user")
+			close(restrictedCalled)
 		},
 	})
 
@@ -246,20 +275,28 @@ func TestGadgetHandler_ChannelMessagePermissionDenied(t *testing.T) {
 	signRequest(req, bodyStr)
 	rr := httptest.NewRecorder()
 
-	// Panics on DbConnection.FirstOrCreate (no DB configured), confirming the handler
-	// reached the permission check code path for channel messages.
-	func() {
-		defer func() { recover() }()
-		handler.ServeHTTP(rr, req)
-	}()
+	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+
+	select {
+	case <-deniedCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for denied route plugin to be called")
+	}
+
+	// Verify the restricted route plugin was NOT called
+	select {
+	case <-restrictedCalled:
+		t.Fatal("restricted route plugin should not have been called")
+	default:
+	}
 }
 
 // --- /gadget/command handler tests ---
 
 func TestCommandHandler_InvalidSignature(t *testing.T) {
-	g := newTestGadget()
+	g := newTestGadget(t)
 	handler := g.Handler()
 
 	body := "command=%2Fdeploy&user_id=U123&text=production"
@@ -275,7 +312,7 @@ func TestCommandHandler_InvalidSignature(t *testing.T) {
 }
 
 func TestCommandHandler_UnknownCommand(t *testing.T) {
-	g := newTestGadget()
+	g := newTestGadget(t)
 	handler := g.Handler()
 
 	formData := url.Values{
@@ -298,8 +335,9 @@ func TestCommandHandler_UnknownCommand(t *testing.T) {
 }
 
 func TestCommandHandler_ValidCommandReachesPermissionCheck(t *testing.T) {
-	g := newTestGadget()
+	g := newTestGadget(t)
 
+	pluginCalled := make(chan struct{})
 	g.Router.AddSlashCommandRoute(router.SlashCommandRoute{
 		Route: router.Route{
 			Name:        "deploy",
@@ -307,6 +345,7 @@ func TestCommandHandler_ValidCommandReachesPermissionCheck(t *testing.T) {
 		},
 		Command: "/deploy",
 		Plugin: func(r router.Router, route router.Route, api slack.Client, cmd slack.SlashCommand) {
+			close(pluginCalled)
 		},
 	})
 
@@ -324,14 +363,15 @@ func TestCommandHandler_ValidCommandReachesPermissionCheck(t *testing.T) {
 	signRequest(req, body)
 	rr := httptest.NewRecorder()
 
-	// Panics on DbConnection.FirstOrCreate, confirming the handler verified the
-	// signature, parsed the slash command, and found the matching route.
-	func() {
-		defer func() { recover() }()
-		handler.ServeHTTP(rr, req)
-	}()
+	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+
+	select {
+	case <-pluginCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for command plugin to be called")
+	}
 }
 
 func TestSafeGo_RecoversPanic(t *testing.T) {
