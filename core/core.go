@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -49,13 +50,22 @@ type Gadget struct {
 	Client *slack.Client
 }
 
-func requestLog(code int, r http.Request, denied bool) {
-	string_code := strconv.Itoa(code)
-	event := log.Info().Str("method", r.Method).Str("code", string_code).Str("uri", r.URL.String())
+func requestLog(code int, r http.Request, denied bool, start time.Time, logger zerolog.Logger) {
+	event := logger.Info().
+		Str("method", r.Method).
+		Str("code", strconv.Itoa(code)).
+		Str("uri", r.URL.String()).
+		Dur("duration_ms", time.Since(start))
 	if denied {
 		event = event.Str("access", "denied")
 	}
-	event.Msg("")
+	event.Msg("Request handled")
+}
+
+func generateRequestID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
 
 // verifySlackRequest reads the request body, verifies the Slack signing secret,
@@ -107,13 +117,14 @@ func stripBotMention(body string, botUuid string) string {
 	return strings.TrimSpace(strings.ReplaceAll(body, "<@"+botUuid+">", ""))
 }
 
-func safeGo(routeName string, fn func()) {
+func safeGo(routeName string, requestID string, fn func()) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Error().
 					Interface("panic", r).
 					Str("route", routeName).
+					Str("request_id", requestID).
 					Str("stack", string(debug.Stack())).
 					Msg("Plugin panicked")
 			}
@@ -192,9 +203,12 @@ func SetupWithConfig(token, secret, databaseUser, databasePass, databaseHost, da
 func (gadget Gadget) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/gadget", func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		requestID := generateRequestID()
+		logger := log.With().Str("request_id", requestID).Logger()
 		statusCode := http.StatusOK
 		accessDenied := false
-		defer func() { requestLog(statusCode, *r, accessDenied) }()
+		defer func() { requestLog(statusCode, *r, accessDenied, start, logger) }()
 
 		body, code, err := verifySlackRequest(w, r)
 		if err != nil {
@@ -250,14 +264,14 @@ func (gadget Gadget) Handler() http.Handler {
 				}
 
 				if !gadget.Router.Can(currentUser, route.Permissions) {
-					log.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
+					logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
 					accessDenied = true
 					route = gadget.Router.DeniedMentionRoute
 				}
 
-				log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
+				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
 
-				safeGo(route.Name, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
+				safeGo(route.Name, requestID, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
 			case *slackevents.MessageEvent:
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
@@ -267,14 +281,17 @@ func (gadget Gadget) Handler() http.Handler {
 					return
 				}
 
-				safeGo(route.Name, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
+				safeGo(route.Name, requestID, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
 			}
 		}
 	})
 	mux.HandleFunc("/gadget/command", func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		requestID := generateRequestID()
+		logger := log.With().Str("request_id", requestID).Logger()
 		statusCode := http.StatusOK
 		accessDenied := false
-		defer func() { requestLog(statusCode, *r, accessDenied) }()
+		defer func() { requestLog(statusCode, *r, accessDenied, start, logger) }()
 
 		body, code, err := verifySlackRequest(w, r)
 		if err != nil {
@@ -302,19 +319,19 @@ func (gadget Gadget) Handler() http.Handler {
 		gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: cmd.UserID})
 
 		if !gadget.Router.Can(currentUser, route.Permissions) {
-			log.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
+			logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
 			accessDenied = true
 			w.Header().Set("Content-Type", "application/json")
 			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Permission denied."}`)); err != nil {
-				log.Error().Err(err).Msg("Failed to write permission denied response")
+				logger.Error().Err(err).Msg("Failed to write permission denied response")
 			}
-			safeGo(gadget.Router.DeniedSlashCommandRoute.Name, func() {
+			safeGo(gadget.Router.DeniedSlashCommandRoute.Name, requestID, func() {
 				gadget.Router.DeniedSlashCommandRoute.Execute(gadget.Router, *gadget.Client, cmd)
 			})
 			return
 		}
 
-		log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
+		logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
 		if route.ImmediateResponse != "" {
 			resp, _ := json.Marshal(map[string]string{
 				"response_type": "ephemeral",
@@ -323,7 +340,7 @@ func (gadget Gadget) Handler() http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(resp)
 		}
-		safeGo(route.Name, func() { route.Execute(gadget.Router, *gadget.Client, cmd) })
+		safeGo(route.Name, requestID, func() { route.Execute(gadget.Router, *gadget.Client, cmd) })
 		if route.ImmediateResponse == "" {
 			w.WriteHeader(http.StatusOK)
 		}
