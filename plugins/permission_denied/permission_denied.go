@@ -13,6 +13,7 @@ func GetMentionRoute() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "*")
 	pluginRoute.Name = "permission_denied"
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+		log.Warn().Str("user", ev.User).Str("channel", ev.Channel).Msg("Mention permission denied")
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
 		api.AddReaction("astonished", msgRef)
 		api.PostMessage(
