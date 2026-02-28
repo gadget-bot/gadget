@@ -77,6 +77,10 @@ Environment variables: `SLACK_OAUTH_TOKEN`, `SLACK_SIGNING_SECRET`, `GADGET_GLOB
 - GORM `FirstOrCreate` pattern for safe upserts
 - Feature branch + PR merge workflow
 
+## GitHub Repository
+
+The origin repository is `gadget-bot/gadget`. Always use this owner/repo when querying GitHub for issues, milestones, pull requests, or other repository details.
+
 ## GitHub Issues
 
 When opening issues for this project (or related projects like Penny):
