@@ -263,7 +263,7 @@ func TestSafeGo_RecoversPanic(t *testing.T) {
 	defer func() { log.Logger = origLogger }()
 
 	done := make(chan struct{})
-	safeGo("panicking-route", func() {
+	safeGo("panicking-route", "test-request-id", func() {
 		defer func() { close(done) }()
 		panic("test panic")
 	})
@@ -277,4 +277,5 @@ func TestSafeGo_RecoversPanic(t *testing.T) {
 	assert.Contains(t, output, "Plugin panicked")
 	assert.Contains(t, output, "panicking-route")
 	assert.Contains(t, output, "test panic")
+	assert.Contains(t, output, "test-request-id")
 }
