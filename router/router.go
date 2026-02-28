@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-//Route The primary type used by event specific routes
+// Route The primary type used by event specific routes
 type Route struct {
 	Name        string
 	Pattern     string
@@ -34,28 +34,28 @@ type RegisteredRoute struct {
 	Type string // RouteTypeMention, RouteTypeChannelMessage, or RouteTypeSlashCommand
 }
 
-//Router the HTTP router which handles Events from Slack
+// Router the HTTP router which handles Events from Slack
 type Router struct {
-	MentionRoutes        map[string]MentionRoute
-	ChannelMessageRoutes map[string]ChannelMessageRoute
-	SlashCommandRoutes   map[string]SlashCommandRoute
-	DefaultMentionRoute      MentionRoute
-	DeniedMentionRoute       MentionRoute
-	DeniedSlashCommandRoute  SlashCommandRoute
-	DbConnection             *gorm.DB
-	BotUID                   string
+	MentionRoutes           map[string]MentionRoute
+	ChannelMessageRoutes    map[string]ChannelMessageRoute
+	SlashCommandRoutes      map[string]SlashCommandRoute
+	DefaultMentionRoute     MentionRoute
+	DeniedMentionRoute      MentionRoute
+	DeniedSlashCommandRoute SlashCommandRoute
+	DbConnection            *gorm.DB
+	BotUID                  string
 }
 
 // this is required because slack-go doesn't seem to provide a way to get the bot's own ID
 type EventsAPICallbackEvent struct {
-	Type            string                      `json:"type"`
-	Token           string                      `json:"token"`
-	TeamID          string                      `json:"team_id"`
-	APIAppID        string                      `json:"api_app_id"`
+	Type           string                      `json:"type"`
+	Token          string                      `json:"token"`
+	TeamID         string                      `json:"team_id"`
+	APIAppID       string                      `json:"api_app_id"`
 	Authorizations []EventMessageAuthorization `json:"authorizations"`
-	EventID         string                      `json:"event_id"`
-	EventTime       int                         `json:"event_time"`
-	EventContext    string                      `json:"event_context"`
+	EventID        string                      `json:"event_id"`
+	EventTime      int                         `json:"event_time"`
+	EventContext   string                      `json:"event_context"`
 }
 type EventMessageAuthorization struct {
 	UserId string `json:"user_id"`
