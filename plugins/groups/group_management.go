@@ -3,7 +3,6 @@ package groups
 import (
 	"errors"
 	"fmt"
-	"regexp"
 
 	"github.com/gadget-bot/gadget/models"
 	"github.com/gadget-bot/gadget/plugins/helpers"
@@ -87,8 +86,7 @@ func addUserToGroup() *router.MentionRoute {
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		helpers.AddReaction(api, ev.Channel, "groups.addUserToGroup", "tada", ev.TimeStamp)
 
-		re := regexp.MustCompile(route.Pattern)
-		results := re.FindStringSubmatch(message)
+		results := route.CompiledPattern.FindStringSubmatch(message)
 		userName := results[1]
 		groupName := results[3]
 		var foundGroup models.Group
@@ -114,8 +112,7 @@ func removeUserFromGroup() *router.MentionRoute {
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		helpers.AddReaction(api, ev.Channel, "groups.removeUserFromGroup", "slightly_frowning_face", ev.TimeStamp)
 
-		re := regexp.MustCompile(route.Pattern)
-		results := re.FindStringSubmatch(message)
+		results := route.CompiledPattern.FindStringSubmatch(message)
 		userName := results[1]
 		groupName := results[3]
 		var foundGroup models.Group

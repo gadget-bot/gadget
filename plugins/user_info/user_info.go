@@ -3,7 +3,6 @@ package user_info
 import (
 	"fmt"
 	"math/rand/v2"
-	"regexp"
 
 	"github.com/gadget-bot/gadget/models"
 	"github.com/gadget-bot/gadget/plugins/helpers"
@@ -21,8 +20,7 @@ func userInfo() *router.MentionRoute {
 	pluginRoute.Help = "who is USER"
 	pluginRoute.Pattern = `(?i)^(tell me about|who is) <@([a-z0-9]+)>[.?]?$`
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
-		re := regexp.MustCompile(route.Pattern)
-		results := re.FindStringSubmatch(message)
+		results := route.CompiledPattern.FindStringSubmatch(message)
 		userName := results[2]
 		var foundUser models.User
 		var response string
