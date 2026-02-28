@@ -3,10 +3,28 @@ package router
 import (
 	"testing"
 
+	"github.com/gadget-bot/gadget/models"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
+
+func setupTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("Failed to open in-memory SQLite: %v", err)
+	}
+	if err := db.AutoMigrate(&models.Group{}, &models.User{}); err != nil {
+		t.Fatalf("Failed to auto-migrate: %v", err)
+	}
+	return db
+}
 
 func TestUpdateBotUID_ValidBody(t *testing.T) {
 	r := NewRouter()
@@ -269,11 +287,11 @@ func TestAddSlashCommandRoute_CompilesPattern(t *testing.T) {
 func TestFindMentionRouteByMessage_UsesCompiledPattern(t *testing.T) {
 	r := NewRouter()
 	r.AddMentionRoute(MentionRoute{
-		Route: Route{Name: "greet", Pattern: `(?i)^hello`, Priority: 1},
+		Route:  Route{Name: "greet", Pattern: `(?i)^hello`, Priority: 1},
 		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {},
 	})
 	r.AddMentionRoute(MentionRoute{
-		Route: Route{Name: "farewell", Pattern: `(?i)^goodbye`, Priority: 1},
+		Route:  Route{Name: "farewell", Pattern: `(?i)^goodbye`, Priority: 1},
 		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {},
 	})
 
@@ -292,7 +310,7 @@ func TestFindMentionRouteByMessage_UsesCompiledPattern(t *testing.T) {
 func TestFindChannelMessageRouteByMessage_UsesCompiledPattern(t *testing.T) {
 	r := NewRouter()
 	r.AddChannelMessageRoute(ChannelMessageRoute{
-		Route: Route{Name: "deploy", Pattern: `(?i)^deploy`, Priority: 1},
+		Route:  Route{Name: "deploy", Pattern: `(?i)^deploy`, Priority: 1},
 		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.MessageEvent, message string) {},
 	})
 
@@ -302,4 +320,107 @@ func TestFindChannelMessageRouteByMessage_UsesCompiledPattern(t *testing.T) {
 
 	_, found = r.FindChannelMessageRouteByMessage("rollback")
 	assert.False(t, found)
+}
+
+func TestCan_GlobalAdminAllowed(t *testing.T) {
+	db := setupTestDB(t)
+	r := NewRouter()
+	r.DbConnection = db
+
+	user := models.User{Uuid: "U_ADMIN"}
+	db.Create(&user)
+	group := models.Group{Name: "globalAdmins"}
+	db.Create(&group)
+	db.Model(&group).Association("Members").Append(&user)
+
+	assert.True(t, r.Can(user, []string{"some_permission"}))
+}
+
+func TestCan_EmptyPermissionsAllowAll(t *testing.T) {
+	db := setupTestDB(t)
+	r := NewRouter()
+	r.DbConnection = db
+
+	user := models.User{Uuid: "U_REGULAR"}
+	db.Create(&user)
+
+	assert.True(t, r.Can(user, []string{}))
+}
+
+func TestCan_WildcardPermissionAllowsAll(t *testing.T) {
+	db := setupTestDB(t)
+	r := NewRouter()
+	r.DbConnection = db
+
+	user := models.User{Uuid: "U_REGULAR"}
+	db.Create(&user)
+
+	assert.True(t, r.Can(user, []string{"*"}))
+}
+
+func TestCan_UserInMatchingGroup(t *testing.T) {
+	db := setupTestDB(t)
+	r := NewRouter()
+	r.DbConnection = db
+
+	user := models.User{Uuid: "U_DEPLOYER"}
+	db.Create(&user)
+	group := models.Group{Name: "deployers"}
+	db.Create(&group)
+	db.Model(&group).Association("Members").Append(&user)
+
+	assert.True(t, r.Can(user, []string{"deployers"}))
+}
+
+func TestCan_UserInNonMatchingGroup(t *testing.T) {
+	db := setupTestDB(t)
+	r := NewRouter()
+	r.DbConnection = db
+
+	user := models.User{Uuid: "U_VIEWER"}
+	db.Create(&user)
+	group := models.Group{Name: "viewers"}
+	db.Create(&group)
+	db.Model(&group).Association("Members").Append(&user)
+
+	assert.False(t, r.Can(user, []string{"deployers"}))
+}
+
+func TestCan_UserInMultipleGroupsOneMatching(t *testing.T) {
+	db := setupTestDB(t)
+	r := NewRouter()
+	r.DbConnection = db
+
+	user := models.User{Uuid: "U_MULTI"}
+	db.Create(&user)
+	viewers := models.Group{Name: "viewers"}
+	deployers := models.Group{Name: "deployers"}
+	db.Create(&viewers)
+	db.Create(&deployers)
+	db.Model(&viewers).Association("Members").Append(&user)
+	db.Model(&deployers).Association("Members").Append(&user)
+
+	assert.True(t, r.Can(user, []string{"deployers"}))
+}
+
+func TestCan_UserWithNoGroupsDenied(t *testing.T) {
+	db := setupTestDB(t)
+	r := NewRouter()
+	r.DbConnection = db
+
+	user := models.User{Uuid: "U_LONELY"}
+	db.Create(&user)
+
+	assert.False(t, r.Can(user, []string{"deployers"}))
+}
+
+func TestCan_NilPermissionsAllowAll(t *testing.T) {
+	db := setupTestDB(t)
+	r := NewRouter()
+	r.DbConnection = db
+
+	user := models.User{Uuid: "U_NIL"}
+	db.Create(&user)
+
+	assert.True(t, r.Can(user, nil))
 }
