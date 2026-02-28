@@ -59,7 +59,7 @@ Routes are added via `Router.AddMentionRoute()` / `Router.AddMentionRoutes()` an
 
 ### Configuration
 
-Environment variables: `SLACK_OAUTH_TOKEN`, `SLACK_SIGNING_SECRET`, `GADGET_GLOBAL_ADMINS` (comma-separated user IDs), `GADGET_DB_USER`, `GADGET_DB_PASS`, `GADGET_DB_HOST`, `GADGET_DB_NAME`, `GADGET_LISTEN_PORT` (default 3000).
+Environment variables: `SLACK_OAUTH_TOKEN`, `SLACK_SIGNING_SECRET`, `GADGET_GLOBAL_ADMINS` (comma-separated user IDs), `GADGET_DB_USER`, `GADGET_DB_PASS`, `GADGET_DB_HOST`, `GADGET_DB_NAME`, `GADGET_LISTEN_PORT` (default 3000), `GADGET_LOG_LEVEL` (default `info`; valid values: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `panic`).
 
 ## Dependencies
 

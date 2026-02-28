@@ -19,6 +19,7 @@ import (
 	"github.com/gadget-bot/gadget/router"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -108,6 +109,20 @@ func stripBotMention(body string, botUuid string) string {
 
 func Setup() (*Gadget, error) {
 	var gadget Gadget
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	logLevel := os.Getenv("GADGET_LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	level, parseErr := zerolog.ParseLevel(logLevel)
+	if parseErr != nil || level == zerolog.NoLevel {
+		log.Warn().Str("GADGET_LOG_LEVEL", logLevel).Msg("Invalid log level, defaulting to info")
+		level = zerolog.InfoLevel
+	}
+	zerolog.SetGlobalLevel(level)
+	log.Info().Str("level", level.String()).Msg("Log level configured")
+
 	api = slack.New(slackOauthToken)
 	gadget.Client = api
 
@@ -120,11 +135,21 @@ func Setup() (*Gadget, error) {
 	gadget.Router.DeniedSlashCommandRoute = *permission_denied.GetSlashCommandRoute()
 	gadget.Router.AddMentionRoutes(groups.GetMentionRoutes())
 	gadget.Router.AddMentionRoutes(user_info.GetMentionRoutes())
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
 	log.Debug().Msg("Connecting to DB...")
+	var gormLogLevel gormlogger.LogLevel
+	switch {
+	case level <= zerolog.DebugLevel:
+		gormLogLevel = gormlogger.Info
+	case level <= zerolog.WarnLevel:
+		gormLogLevel = gormlogger.Warn
+	default:
+		gormLogLevel = gormlogger.Silent
+	}
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", dbUser, dbPass, dbHost, dbName)
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormLogLevel),
+	})
 	if err != nil {
 		return &gadget, err
 	}
