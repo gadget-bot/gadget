@@ -262,8 +262,10 @@ func TestSafeGo_RecoversPanic(t *testing.T) {
 	log.Logger = zerolog.New(&buf)
 	defer func() { log.Logger = origLogger }()
 
+	logger := zerolog.New(&buf).With().Str("request_id", "test-request-id").Logger()
+
 	done := make(chan struct{})
-	safeGo("panicking-route", "test-request-id", func() {
+	safeGo("panicking-route", logger, func() {
 		defer func() { close(done) }()
 		panic("test panic")
 	})
