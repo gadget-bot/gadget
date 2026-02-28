@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gadget-bot/gadget/models"
 	"github.com/gadget-bot/gadget/plugins/fallback"
@@ -127,6 +128,12 @@ func Setup() (*Gadget, error) {
 	if err != nil {
 		return &gadget, err
 	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return &gadget, err
+	}
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	var version string
 	db.Raw("SELECT VERSION() as version").Scan(&version)
