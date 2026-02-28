@@ -134,6 +134,7 @@ func Setup() (*Gadget, error) {
 		return &gadget, err
 	}
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(3 * time.Minute)
 
 	var version string
 	db.Raw("SELECT VERSION() as version").Scan(&version)
