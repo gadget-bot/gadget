@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,31 +67,35 @@ func generateRequestID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
 		log.Error().Err(err).Msg("Failed to generate request ID")
-		return "unknown"
+		return fmt.Sprintf("%x", time.Now().UnixNano())
 	}
-	return fmt.Sprintf("%x", b)
+	return hex.EncodeToString(b)
 }
 
 // verifySlackRequest reads the request body, verifies the Slack signing secret,
 // and returns the body bytes. On failure it writes the appropriate HTTP status
 // and returns a non-nil error.
-func verifySlackRequest(w http.ResponseWriter, r *http.Request) ([]byte, int, error) {
+func verifySlackRequest(w http.ResponseWriter, r *http.Request, logger zerolog.Logger) ([]byte, int, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		logger.Error().Err(err).Msg("Failed to read request body")
 		w.WriteHeader(http.StatusBadRequest)
 		return nil, http.StatusBadRequest, err
 	}
 
 	sv, err := slack.NewSecretsVerifier(r.Header, signingSecret)
 	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create secrets verifier")
 		w.WriteHeader(http.StatusUnauthorized)
 		return nil, http.StatusUnauthorized, err
 	}
 	if _, err := sv.Write(body); err != nil {
+		logger.Error().Err(err).Msg("Failed to write body to verifier")
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil, http.StatusInternalServerError, err
 	}
 	if err := sv.Ensure(); err != nil {
+		logger.Warn().Err(err).Msg("Request signature verification failed")
 		w.WriteHeader(http.StatusUnauthorized)
 		return nil, http.StatusUnauthorized, err
 	}
@@ -212,7 +217,7 @@ func (gadget Gadget) Handler() http.Handler {
 		accessDenied := false
 		defer func() { requestLog(statusCode, *r, accessDenied, start, logger) }()
 
-		body, code, err := verifySlackRequest(w, r)
+		body, code, err := verifySlackRequest(w, r, logger)
 		if err != nil {
 			statusCode = code
 			return
@@ -283,6 +288,7 @@ func (gadget Gadget) Handler() http.Handler {
 					return
 				}
 
+				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
 				safeGo(route.Name, logger, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
 			}
 		}
@@ -295,7 +301,7 @@ func (gadget Gadget) Handler() http.Handler {
 		accessDenied := false
 		defer func() { requestLog(statusCode, *r, accessDenied, start, logger) }()
 
-		body, code, err := verifySlackRequest(w, r)
+		body, code, err := verifySlackRequest(w, r, logger)
 		if err != nil {
 			statusCode = code
 			return
