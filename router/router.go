@@ -40,8 +40,9 @@ type Router struct {
 	ChannelMessageRoutes    map[string]ChannelMessageRoute
 	SlashCommandRoutes      map[string]SlashCommandRoute
 	DefaultMentionRoute     MentionRoute
-	DeniedMentionRoute      MentionRoute
-	DeniedSlashCommandRoute SlashCommandRoute
+	DeniedMentionRoute          MentionRoute
+	DeniedChannelMessageRoute   ChannelMessageRoute
+	DeniedSlashCommandRoute     SlashCommandRoute
 	DbConnection            *gorm.DB
 	BotUID                  string
 }

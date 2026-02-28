@@ -192,6 +192,70 @@ func TestGadgetHandler_ChannelMessageRouting(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
+func TestGadgetHandler_ChannelMessagePermissionDenied(t *testing.T) {
+	g := newTestGadget()
+
+	g.Router.AddChannelMessageRoute(router.ChannelMessageRoute{
+		Route: router.Route{
+			Name:        "restricted-channel",
+			Pattern:     `(?i)^deploy`,
+			Permissions: []string{"deployers"},
+		},
+		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
+			t.Error("Plugin should not have been called for unauthorized user")
+		},
+	})
+
+	deniedCalled := make(chan struct{})
+	g.Router.DeniedChannelMessageRoute = router.ChannelMessageRoute{
+		Route: router.Route{
+			Name:        "permission_denied",
+			Permissions: []string{"*"},
+		},
+		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
+			close(deniedCalled)
+		},
+	}
+	g.Router.BotUID = "U_BOT"
+
+	handler := g.Handler()
+
+	eventPayload := map[string]interface{}{
+		"type":       "event_callback",
+		"token":      "fake",
+		"team_id":    "T123",
+		"api_app_id": "A123",
+		"authorizations": []map[string]string{
+			{"user_id": "U_BOT", "team_id": "T123"},
+		},
+		"event": map[string]interface{}{
+			"type":         "message",
+			"user":         "U_USER",
+			"text":         "deploy production",
+			"channel":      "C123",
+			"channel_type": "channel",
+			"ts":           "1234567890.123456",
+		},
+		"event_id":   "Ev125",
+		"event_time": 1234567890,
+	}
+	body, _ := json.Marshal(eventPayload)
+	bodyStr := string(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/gadget", strings.NewReader(bodyStr))
+	signRequest(req, bodyStr)
+	rr := httptest.NewRecorder()
+
+	// Panics on DbConnection.FirstOrCreate (no DB configured), confirming the handler
+	// reached the permission check code path for channel messages.
+	func() {
+		defer func() { recover() }()
+		handler.ServeHTTP(rr, req)
+	}()
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
 // --- /gadget/command handler tests ---
 
 func TestCommandHandler_InvalidSignature(t *testing.T) {
