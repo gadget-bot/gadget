@@ -31,11 +31,17 @@ func GetChannelMessageRoute() *router.ChannelMessageRoute {
 	pluginRoute.Plugin = func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
 		log.Warn().Str("user", ev.User).Str("channel", ev.Channel).Msg("Channel message permission denied")
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
-		api.AddReaction("astonished", msgRef)
-		api.PostMessage(
+		if err := api.AddReaction("astonished", msgRef); err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "permission_denied").Msg("Failed to add reaction")
+		}
+		_, _, err := api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText("I'm sorry, <@"+ev.User+">, but you're not allowed to do that.", false),
+			slack.MsgOptionTS(ev.ThreadTimeStamp),
 		)
+		if err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "permission_denied").Msg("Failed to post message")
+		}
 	}
 	return &pluginRoute
 }

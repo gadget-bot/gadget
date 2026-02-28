@@ -7,6 +7,7 @@ import (
 
 	"github.com/gadget-bot/gadget/models"
 	"github.com/gadget-bot/gadget/router"
+	"github.com/rs/zerolog/log"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
@@ -19,10 +20,14 @@ func getMyGroups() *router.MentionRoute {
 	pluginRoute.Name = "groups.getMyGroups"
 	pluginRoute.Pattern = `(?i)^((list )?my groups|which groups am I (in|a member of))[.?]?$`
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
-		api.PostMessage(
+		_, _, err := api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText("Here are your groups, <@"+ev.User+">:", false),
+			slack.MsgOptionTS(ev.ThreadTimeStamp),
 		)
+		if err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "groups.getMyGroups").Msg("Failed to post message")
+		}
 
 		var currentUser models.User
 		router.DbConnection.Preload("Groups").FirstOrCreate(&currentUser, models.User{Uuid: ev.User})
@@ -38,10 +43,14 @@ func getMyGroups() *router.MentionRoute {
 			response = "You don't seem to be a member of _any_ groups. Bummer."
 		}
 
-		api.PostMessage(
+		_, _, err = api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText(response, false),
+			slack.MsgOptionTS(ev.ThreadTimeStamp),
 		)
+		if err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "groups.getMyGroups").Msg("Failed to post message")
+		}
 	}
 	return &pluginRoute
 }
@@ -54,10 +63,14 @@ func getAllGroups() *router.MentionRoute {
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		var groups []models.Group
 
-		api.PostMessage(
+		_, _, err := api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText("Here are *all* the groups I know about:", false),
+			slack.MsgOptionTS(ev.ThreadTimeStamp),
 		)
+		if err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "groups.getAllGroups").Msg("Failed to post message")
+		}
 
 		router.DbConnection.Find(&groups)
 
@@ -67,10 +80,14 @@ func getAllGroups() *router.MentionRoute {
 			response += fmt.Sprintf("*-* %s\n", group.Name)
 		}
 
-		api.PostMessage(
+		_, _, err = api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText(response, false),
+			slack.MsgOptionTS(ev.ThreadTimeStamp),
 		)
+		if err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "groups.getAllGroups").Msg("Failed to post message")
+		}
 	}
 	return &pluginRoute
 }
@@ -82,7 +99,9 @@ func addUserToGroup() *router.MentionRoute {
 	pluginRoute.Pattern = `(?i)^add <@([a-z0-9]+)> to( group)? ([a-z0-9]+)\.?$`
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
-		api.AddReaction("tada", msgRef)
+		if err := api.AddReaction("tada", msgRef); err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "groups.addUserToGroup").Msg("Failed to add reaction")
+		}
 
 		re := regexp.MustCompile(route.Pattern)
 		results := re.FindStringSubmatch(message)
@@ -95,10 +114,14 @@ func addUserToGroup() *router.MentionRoute {
 		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
 		router.DbConnection.Model(&foundGroup).Association("Members").Append(&foundUser)
 
-		api.PostMessage(
+		_, _, err := api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText(fmt.Sprintf("I successfully added <@%s> to %s!", userName, groupName), false),
+			slack.MsgOptionTS(ev.ThreadTimeStamp),
 		)
+		if err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "groups.addUserToGroup").Msg("Failed to post message")
+		}
 	}
 	return &pluginRoute
 }
@@ -110,7 +133,9 @@ func removeUserFromGroup() *router.MentionRoute {
 	pluginRoute.Pattern = `(?i)^remove <@([a-z0-9]+)> from( group)? ([a-z0-9]+)\.?$`
 	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
-		api.AddReaction("slightly_frowning_face", msgRef)
+		if err := api.AddReaction("slightly_frowning_face", msgRef); err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "groups.removeUserFromGroup").Msg("Failed to add reaction")
+		}
 
 		re := regexp.MustCompile(route.Pattern)
 		results := re.FindStringSubmatch(message)
@@ -146,10 +171,14 @@ func removeUserFromGroup() *router.MentionRoute {
 			}
 		}
 
-		api.PostMessage(
+		_, _, err := api.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText(response, false),
+			slack.MsgOptionTS(ev.ThreadTimeStamp),
 		)
+		if err != nil {
+			log.Error().Err(err).Str("channel", ev.Channel).Str("plugin", "groups.removeUserFromGroup").Msg("Failed to post message")
+		}
 	}
 	return &pluginRoute
 }
