@@ -61,7 +61,7 @@ clean: ## Clean the workspace including modcache and dist/
 .PHONY: tools
 tools: ## Install tools needed for development
 	@$(MAKE) --no-print-directory log-$@
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
 
 ###############
 ##@ Database
