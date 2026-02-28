@@ -17,7 +17,7 @@ import (
 func findGroup(router router.Router, name string) (models.Group, error) {
 	var foundGroup models.Group
 	result := router.DbConnection.First(&foundGroup)
-	log.Debug().Str("group", foundGroup.Name).Msg("")
+	log.Debug().Str("group", foundGroup.Name).Msg("Group lookup")
 
 	return foundGroup, result.Error
 }

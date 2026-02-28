@@ -47,6 +47,13 @@ func userInfo() *router.MentionRoute {
 		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
 
 		slackInfo := foundUser.Info(api)
+		if slackInfo == nil {
+			api.PostMessage(
+				ev.Channel,
+				slack.MsgOptionText(fmt.Sprintf("Sorry, I couldn't look up info for <@%s>.", userName), false),
+			)
+			return
+		}
 		response += fmt.Sprintf("- *Real Name:* %s\n", slackInfo.RealName)
 		response += fmt.Sprintf("- *Time Zone:* %s\n", slackInfo.TZ)
 		response += fmt.Sprintf("- *Email:* %s\n", slackInfo.Profile.Email)

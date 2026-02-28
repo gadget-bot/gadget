@@ -19,6 +19,7 @@ import (
 	"github.com/gadget-bot/gadget/router"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -54,7 +55,7 @@ func requestLog(code int, r http.Request, denied bool) {
 	if denied {
 		event = event.Str("access", "denied")
 	}
-	event.Msg("")
+	event.Msg("Request handled")
 }
 
 // verifySlackRequest reads the request body, verifies the Slack signing secret,
@@ -108,6 +109,20 @@ func stripBotMention(body string, botUuid string) string {
 
 func Setup() (*Gadget, error) {
 	var gadget Gadget
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	logLevel := os.Getenv("GADGET_LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	level, parseErr := zerolog.ParseLevel(logLevel)
+	if parseErr != nil || level == zerolog.NoLevel {
+		log.Warn().Str("GADGET_LOG_LEVEL", logLevel).Msg("Invalid log level, defaulting to info")
+		level = zerolog.InfoLevel
+	}
+	zerolog.SetGlobalLevel(level)
+	log.Info().Str("level", level.String()).Msg("Log level configured")
+
 	api = slack.New(slackOauthToken)
 	gadget.Client = api
 
@@ -120,11 +135,21 @@ func Setup() (*Gadget, error) {
 	gadget.Router.DeniedSlashCommandRoute = *permission_denied.GetSlashCommandRoute()
 	gadget.Router.AddMentionRoutes(groups.GetMentionRoutes())
 	gadget.Router.AddMentionRoutes(user_info.GetMentionRoutes())
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
 	log.Debug().Msg("Connecting to DB...")
+	var gormLogLevel gormlogger.LogLevel
+	switch {
+	case level <= zerolog.DebugLevel:
+		gormLogLevel = gormlogger.Info
+	case level <= zerolog.WarnLevel:
+		gormLogLevel = gormlogger.Warn
+	default:
+		gormLogLevel = gormlogger.Silent
+	}
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", dbUser, dbPass, dbHost, dbName)
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormLogLevel),
+	})
 	if err != nil {
 		return &gadget, err
 	}
@@ -138,7 +163,7 @@ func Setup() (*Gadget, error) {
 
 	var version string
 	db.Raw("SELECT VERSION() as version").Scan(&version)
-	log.Debug().Msg(fmt.Sprintf("Connected to DB: %s", version))
+	log.Debug().Str("version", version).Msg("Connected to DB")
 
 	gadget.Router.DbConnection = db
 	gadget.Router.SetupDb()
@@ -182,12 +207,14 @@ func (gadget Gadget) Handler() http.Handler {
 
 		body, code, err := verifySlackRequest(w, r)
 		if err != nil {
+			log.Warn().Err(err).Str("uri", r.URL.String()).Msg("Request verification failed")
 			statusCode = code
 			return
 		}
 
 		eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionNoVerifyToken())
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to parse Slack event")
 			statusCode = http.StatusInternalServerError
 			w.WriteHeader(statusCode)
 			return
@@ -198,6 +225,7 @@ func (gadget Gadget) Handler() http.Handler {
 
 			err := json.Unmarshal([]byte(body), &res)
 			if err != nil {
+				log.Error().Err(err).Msg("Failed to unmarshal URL verification challenge")
 				statusCode = http.StatusInternalServerError
 				w.WriteHeader(statusCode)
 				return
@@ -210,6 +238,7 @@ func (gadget Gadget) Handler() http.Handler {
 			innerEvent := eventsAPIEvent.InnerEvent
 			err := gadget.Router.UpdateBotUID(body)
 			if err != nil {
+				log.Error().Err(err).Msg("Failed to update bot UID")
 				statusCode = http.StatusInternalServerError
 				w.WriteHeader(statusCode)
 				return
@@ -262,6 +291,7 @@ func (gadget Gadget) Handler() http.Handler {
 
 		body, code, err := verifySlackRequest(w, r)
 		if err != nil {
+			log.Warn().Err(err).Str("uri", r.URL.String()).Msg("Request verification failed")
 			statusCode = code
 			return
 		}
@@ -270,6 +300,7 @@ func (gadget Gadget) Handler() http.Handler {
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		cmd, err := slack.SlashCommandParse(r)
 		if err != nil {
+			log.Warn().Err(err).Msg("Failed to parse slash command")
 			statusCode = http.StatusBadRequest
 			w.WriteHeader(statusCode)
 			return
@@ -298,10 +329,16 @@ func (gadget Gadget) Handler() http.Handler {
 
 		log.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
 		if route.ImmediateResponse != "" {
-			resp, _ := json.Marshal(map[string]string{
+			resp, err := json.Marshal(map[string]string{
 				"response_type": "ephemeral",
 				"text":          route.ImmediateResponse,
 			})
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to marshal immediate response")
+				statusCode = http.StatusInternalServerError
+				w.WriteHeader(statusCode)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(resp)
 		}
@@ -316,6 +353,6 @@ func (gadget Gadget) Handler() http.Handler {
 
 func (gadget Gadget) Run() error {
 	handler := gadget.Handler()
-	log.Print(fmt.Sprintf("Server listening on port %s", getListenPort()))
+	log.Info().Str("port", getListenPort()).Msg("Server listening")
 	return http.ListenAndServe(fmt.Sprintf(":%s", getListenPort()), handler)
 }

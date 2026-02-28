@@ -3,6 +3,7 @@ package router
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"sort"
 
@@ -51,7 +52,7 @@ type EventsAPICallbackEvent struct {
 	Token           string                      `json:"token"`
 	TeamID          string                      `json:"team_id"`
 	APIAppID        string                      `json:"api_app_id"`
-	Authoritzations []EventMessageAuthorization `json:"authorizations"`
+	Authorizations []EventMessageAuthorization `json:"authorizations"`
 	EventID         string                      `json:"event_id"`
 	EventTime       int                         `json:"event_time"`
 	EventContext    string                      `json:"event_context"`
@@ -82,12 +83,14 @@ func (r *Router) UpdateBotUID(body []byte) error {
 
 func getBotUidFromBody(body []byte) (string, error) {
 	var authorizedUsers EventsAPICallbackEvent
-	json.Unmarshal([]byte(body), &authorizedUsers)
+	if err := json.Unmarshal(body, &authorizedUsers); err != nil {
+		return "", fmt.Errorf("unmarshal event body: %w", err)
+	}
 
-	if len(authorizedUsers.Authoritzations) > 0 {
-		return authorizedUsers.Authoritzations[0].UserId, nil
+	if len(authorizedUsers.Authorizations) > 0 {
+		return authorizedUsers.Authorizations[0].UserId, nil
 	} else {
-		return "", errors.New("Weird")
+		return "", errors.New("no authorized users in event body")
 	}
 }
 
