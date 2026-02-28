@@ -14,12 +14,13 @@ import (
 
 // Route The primary type used by event specific routes
 type Route struct {
-	Name        string
-	Pattern     string
-	Description string
-	Help        string
-	Permissions []string
-	Priority    int
+	Name            string
+	Pattern         string
+	CompiledPattern *regexp.Regexp
+	Description     string
+	Help            string
+	Permissions     []string
+	Priority        int
 }
 
 const (
@@ -133,8 +134,7 @@ func (router Router) FindChannelMessageRouteByMessage(message string) (ChannelMe
 	sort.Sort(channelMessageRoutesSortedByPriority(sortedRoutes))
 
 	for _, route := range sortedRoutes {
-		re := regexp.MustCompile(route.Pattern)
-		if re.MatchString(message) {
+		if route.CompiledPattern != nil && route.CompiledPattern.MatchString(message) {
 			matchingRoute = route
 			foundRoute = true
 			break
@@ -157,8 +157,7 @@ func (router Router) FindMentionRouteByMessage(message string) (MentionRoute, bo
 	sort.Sort(mentionRoutesSortedByPriority(sortedRoutes))
 
 	for _, route := range sortedRoutes {
-		re := regexp.MustCompile(route.Pattern)
-		if re.MatchString(message) {
+		if route.CompiledPattern != nil && route.CompiledPattern.MatchString(message) {
 			matchingRoute = route
 			foundRoute = true
 			break
@@ -210,6 +209,9 @@ func (router Router) Can(u models.User, permissions []string) bool {
 
 // AddMentionRoute sets upserts and element into `MentionRoutes` whose key is the provided `Name` field
 func (router *Router) AddMentionRoute(route MentionRoute) {
+	if route.Pattern != "" {
+		route.CompiledPattern = regexp.MustCompile(route.Pattern)
+	}
 	router.MentionRoutes[route.Name] = route
 }
 
@@ -222,6 +224,9 @@ func (router *Router) AddMentionRoutes(routes []MentionRoute) {
 
 // AddChannelMessageRoute sets the key for ChannelMessages key to route.Name and it's value to route
 func (router *Router) AddChannelMessageRoute(route ChannelMessageRoute) {
+	if route.Pattern != "" {
+		route.CompiledPattern = regexp.MustCompile(route.Pattern)
+	}
 	router.ChannelMessageRoutes[route.Name] = route
 }
 
@@ -234,6 +239,9 @@ func (router *Router) AddChannelMessageRoutes(routes []ChannelMessageRoute) {
 
 // AddSlashCommandRoute adds a slash command route keyed by its Name
 func (router *Router) AddSlashCommandRoute(route SlashCommandRoute) {
+	if route.Pattern != "" {
+		route.CompiledPattern = regexp.MustCompile(route.Pattern)
+	}
 	router.SlashCommandRoutes[route.Command] = route
 }
 
