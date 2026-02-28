@@ -66,10 +66,7 @@ func requestLog(code int, r http.Request, denied bool, start time.Time, logger z
 
 func generateRequestID() string {
 	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		log.Error().Err(err).Msg("Failed to generate request ID")
-		return fmt.Sprintf("%x", time.Now().UnixNano())
-	}
+	rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
@@ -133,7 +130,7 @@ func safeGo(routeName string, logger zerolog.Logger, fn func()) {
 				logger.Error().
 					Interface("panic", r).
 					Str("route", routeName).
-					Str("stack", string(debug.Stack())).
+					Bytes("stack", debug.Stack()).
 					Msg("Plugin panicked")
 			}
 		}()
@@ -244,14 +241,13 @@ func (gadget Gadget) Handler() http.Handler {
 
 		body, code, err := verifySlackRequest(w, r, logger)
 		if err != nil {
-			log.Warn().Err(err).Str("uri", r.URL.String()).Msg("Request verification failed")
 			statusCode = code
 			return
 		}
 
 		eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionNoVerifyToken())
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to parse Slack event")
+			logger.Error().Err(err).Msg("Failed to parse Slack event")
 			statusCode = http.StatusInternalServerError
 			w.WriteHeader(statusCode)
 			return
@@ -262,7 +258,7 @@ func (gadget Gadget) Handler() http.Handler {
 
 			err := json.Unmarshal([]byte(body), &res)
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to unmarshal URL verification challenge")
+				logger.Error().Err(err).Msg("Failed to unmarshal URL verification challenge")
 				statusCode = http.StatusInternalServerError
 				w.WriteHeader(statusCode)
 				return
@@ -275,7 +271,7 @@ func (gadget Gadget) Handler() http.Handler {
 			innerEvent := eventsAPIEvent.InnerEvent
 			err := gadget.Router.UpdateBotUID(body)
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to update bot UID")
+				logger.Error().Err(err).Msg("Failed to update bot UID")
 				statusCode = http.StatusInternalServerError
 				w.WriteHeader(statusCode)
 				return
@@ -332,7 +328,6 @@ func (gadget Gadget) Handler() http.Handler {
 
 		body, code, err := verifySlackRequest(w, r, logger)
 		if err != nil {
-			log.Warn().Err(err).Str("uri", r.URL.String()).Msg("Request verification failed")
 			statusCode = code
 			return
 		}
@@ -341,7 +336,7 @@ func (gadget Gadget) Handler() http.Handler {
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		cmd, err := slack.SlashCommandParse(r)
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to parse slash command")
+			logger.Warn().Err(err).Msg("Failed to parse slash command")
 			statusCode = http.StatusBadRequest
 			w.WriteHeader(statusCode)
 			return
@@ -377,7 +372,7 @@ func (gadget Gadget) Handler() http.Handler {
 				"text":          route.ImmediateResponse,
 			})
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to marshal immediate response")
+				logger.Error().Err(err).Msg("Failed to marshal immediate response")
 				statusCode = http.StatusInternalServerError
 				w.WriteHeader(statusCode)
 				return

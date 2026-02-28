@@ -7,20 +7,34 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gadget-bot/gadget/router"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
 )
+
+// signalWriter wraps an io.Writer and signals a channel on the first write.
+type signalWriter struct {
+	io.Writer
+	once   sync.Once
+	signal chan struct{}
+}
+
+func (w *signalWriter) Write(p []byte) (int, error) {
+	n, err := w.Writer.Write(p)
+	w.once.Do(func() { close(w.signal) })
+	return n, err
+}
 
 const testSecret = "test-signing-secret"
 
@@ -258,22 +272,20 @@ func TestCommandHandler_ValidCommandReachesPermissionCheck(t *testing.T) {
 
 func TestSafeGo_RecoversPanic(t *testing.T) {
 	var buf bytes.Buffer
-	origLogger := log.Logger
-	log.Logger = zerolog.New(&buf)
-	defer func() { log.Logger = origLogger }()
+	logged := make(chan struct{})
+	w := &signalWriter{Writer: &buf, signal: logged}
 
-	logger := zerolog.New(&buf).With().Str("request_id", "test-request-id").Logger()
+	logger := zerolog.New(w).With().Str("request_id", "test-request-id").Logger()
 
-	done := make(chan struct{})
 	safeGo("panicking-route", logger, func() {
-		defer func() { close(done) }()
 		panic("test panic")
 	})
 
-	// Wait for the goroutine's deferred close, then give the recover
-	// handler time to log before checking output.
-	<-done
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-logged:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for panic recovery log")
+	}
 
 	output := buf.String()
 	assert.Contains(t, output, "Plugin panicked")
