@@ -8,6 +8,7 @@ import (
 
 	"github.com/gadget-bot/gadget/models"
 
+	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )
 
@@ -82,7 +83,9 @@ func (r *Router) UpdateBotUID(body []byte) error {
 
 func getBotUidFromBody(body []byte) (string, error) {
 	var authorizedUsers EventsAPICallbackEvent
-	json.Unmarshal([]byte(body), &authorizedUsers)
+	if err := json.Unmarshal([]byte(body), &authorizedUsers); err != nil {
+		log.Warn().Err(err).Msg("Failed to unmarshal bot UID from event body")
+	}
 
 	if len(authorizedUsers.Authoritzations) > 0 {
 		return authorizedUsers.Authoritzations[0].UserId, nil
