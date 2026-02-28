@@ -18,9 +18,11 @@ func TestGetMentionRoutes_ReturnsAllRoutes(t *testing.T) {
 		"groups.removeUserFromGroup",
 	}
 
-	for i, name := range expectedNames {
-		assert.Equal(t, name, routes[i].Name)
+	actualNames := make([]string, len(routes))
+	for i, route := range routes {
+		actualNames[i] = route.Name
 	}
+	assert.ElementsMatch(t, expectedNames, actualNames, "route names should match regardless of order")
 }
 
 func TestGetMyGroups_Metadata(t *testing.T) {
