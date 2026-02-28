@@ -19,11 +19,12 @@ func ThreadReplyOption(threadTS string) slack.MsgOption {
 
 // PostMessage sends a Slack message to the given channel and logs any error
 // using zerolog with consistent structured fields.
-func PostMessage(api slack.Client, channel, plugin string, options ...slack.MsgOption) {
-	_, _, err := api.PostMessage(channel, options...)
+func PostMessage(api slack.Client, channel, plugin string, options ...slack.MsgOption) (string, string) {
+	ch, ts, err := api.PostMessage(channel, options...)
 	if err != nil {
 		log.Error().Err(err).Str("channel", channel).Str("plugin", plugin).Msg("Failed to post message")
 	}
+	return ch, ts
 }
 
 // AddReaction adds a reaction to a message and logs any error using zerolog
@@ -31,6 +32,6 @@ func PostMessage(api slack.Client, channel, plugin string, options ...slack.MsgO
 func AddReaction(api slack.Client, channel, plugin, reaction, timestamp string) {
 	msgRef := slack.NewRefToMessage(channel, timestamp)
 	if err := api.AddReaction(reaction, msgRef); err != nil {
-		log.Error().Err(err).Str("channel", channel).Str("plugin", plugin).Msg("Failed to add reaction")
+		log.Error().Err(err).Str("channel", channel).Str("plugin", plugin).Str("reaction", reaction).Msg("Failed to add reaction")
 	}
 }
