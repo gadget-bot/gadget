@@ -63,7 +63,9 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("Failed to open in-memory SQLite: %v", err)
 	}
-	db.AutoMigrate(&models.Group{}, &models.User{})
+	if err := db.AutoMigrate(&models.Group{}, &models.User{}); err != nil {
+		t.Fatalf("Failed to auto-migrate: %v", err)
+	}
 	return db
 }
 
@@ -113,7 +115,7 @@ func TestGadgetHandler_InvalidSignature(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
-func TestGadgetHandler_CallbackEventReachesRouting(t *testing.T) {
+func TestGadgetHandler_CallbackEventCallsPlugin(t *testing.T) {
 	g := newTestGadget(t)
 
 	pluginCalled := make(chan struct{})
@@ -166,7 +168,7 @@ func TestGadgetHandler_CallbackEventReachesRouting(t *testing.T) {
 	}
 }
 
-func TestGadgetHandler_ChannelMessageRouting(t *testing.T) {
+func TestGadgetHandler_ChannelMessageCallsPlugin(t *testing.T) {
 	g := newTestGadget(t)
 
 	pluginCalled := make(chan struct{})
@@ -293,6 +295,78 @@ func TestGadgetHandler_ChannelMessagePermissionDenied(t *testing.T) {
 	}
 }
 
+func TestGadgetHandler_MentionPermissionDenied(t *testing.T) {
+	g := newTestGadget(t)
+
+	restrictedCalled := make(chan struct{})
+	g.Router.AddMentionRoute(router.MentionRoute{
+		Route: router.Route{
+			Name:        "restricted-mention",
+			Pattern:     `(?i)^hello`,
+			Permissions: []string{"greeters"},
+		},
+		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+			close(restrictedCalled)
+		},
+	})
+
+	deniedCalled := make(chan struct{})
+	g.Router.DeniedMentionRoute = router.MentionRoute{
+		Route: router.Route{
+			Name:        "permission_denied",
+			Permissions: []string{"*"},
+		},
+		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+			close(deniedCalled)
+		},
+	}
+	g.Router.BotUID = "U_BOT"
+
+	handler := g.Handler()
+
+	eventPayload := map[string]interface{}{
+		"type":       "event_callback",
+		"token":      "fake",
+		"team_id":    "T123",
+		"api_app_id": "A123",
+		"authorizations": []map[string]string{
+			{"user_id": "U_BOT", "team_id": "T123"},
+		},
+		"event": map[string]interface{}{
+			"type":    "app_mention",
+			"user":    "U_USER",
+			"text":    "<@U_BOT> hello world",
+			"channel": "C123",
+			"ts":      "1234567890.123456",
+		},
+		"event_id":   "Ev126",
+		"event_time": 1234567890,
+	}
+	body, _ := json.Marshal(eventPayload)
+	bodyStr := string(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/gadget", strings.NewReader(bodyStr))
+	signRequest(req, bodyStr)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	select {
+	case <-deniedCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for denied route plugin to be called")
+	}
+
+	// Verify the restricted route plugin was NOT called
+	select {
+	case <-restrictedCalled:
+		t.Fatal("restricted route plugin should not have been called")
+	default:
+	}
+}
+
 // --- /gadget/command handler tests ---
 
 func TestCommandHandler_InvalidSignature(t *testing.T) {
@@ -334,7 +408,7 @@ func TestCommandHandler_UnknownCommand(t *testing.T) {
 	assert.JSONEq(t, `{"response_type":"ephemeral","text":"Unknown command."}`, rr.Body.String())
 }
 
-func TestCommandHandler_ValidCommandReachesPermissionCheck(t *testing.T) {
+func TestCommandHandler_ValidCommandCallsPlugin(t *testing.T) {
 	g := newTestGadget(t)
 
 	pluginCalled := make(chan struct{})
