@@ -3,6 +3,7 @@ package groups
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	"github.com/gadget-bot/gadget/models"
@@ -27,6 +28,11 @@ func setupGroupTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("Failed to auto-migrate: %v", err)
 	}
 	return db
+}
+
+func compileMentionRouteForTest(t *testing.T, route *router.MentionRoute) {
+	t.Helper()
+	route.CompiledPattern = regexp.MustCompile(route.Pattern)
 }
 
 func TestGetMentionRoutes_ReturnsAllRoutes(t *testing.T) {
@@ -175,6 +181,7 @@ func TestAddUserToGroup_AddsSuccessfully(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := addUserToGroup()
+	compileMentionRouteForTest(t, route)
 	r := router.Router{DbConnection: db}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
@@ -220,6 +227,7 @@ func TestRemoveUserFromGroup_RemovesSuccessfully(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := removeUserFromGroup()
+	compileMentionRouteForTest(t, route)
 	r := router.Router{DbConnection: db}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
@@ -253,6 +261,7 @@ func TestRemoveUserFromGroup_NonexistentGroup(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := removeUserFromGroup()
+	compileMentionRouteForTest(t, route)
 	r := router.Router{DbConnection: db}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
@@ -325,6 +334,7 @@ func TestAddUserToGroup_UserAlreadyInGroup(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := addUserToGroup()
+	compileMentionRouteForTest(t, route)
 	r := router.Router{DbConnection: db}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
@@ -364,6 +374,7 @@ func TestRemoveUserFromGroup_UserNotAMember(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := removeUserFromGroup()
+	compileMentionRouteForTest(t, route)
 	r := router.Router{DbConnection: db}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",

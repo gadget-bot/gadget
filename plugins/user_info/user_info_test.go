@@ -3,6 +3,7 @@ package user_info
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	"github.com/gadget-bot/gadget/models"
@@ -27,6 +28,11 @@ func setupUserInfoTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("Failed to auto-migrate: %v", err)
 	}
 	return db
+}
+
+func compileMentionRouteForTest(t *testing.T, route *router.MentionRoute) {
+	t.Helper()
+	route.CompiledPattern = regexp.MustCompile(route.Pattern)
 }
 
 func TestGetMentionRoutes_ReturnsOneRoute(t *testing.T) {
@@ -79,6 +85,7 @@ func TestUserInfoPlugin_PostsUserDetails(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := userInfo()
+	compileMentionRouteForTest(t, route)
 	r := router.Router{DbConnection: db}
 	ev := slackevents.AppMentionEvent{
 		User:    "U_ADMIN",
@@ -114,6 +121,7 @@ func TestUserInfoPlugin_UserNotFound(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := userInfo()
+	compileMentionRouteForTest(t, route)
 	r := router.Router{DbConnection: db}
 	ev := slackevents.AppMentionEvent{
 		User:    "U_ADMIN",
