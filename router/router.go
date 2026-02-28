@@ -72,7 +72,7 @@ func NewRouter() *Router {
 	return &newRouter
 }
 
-// UpdateUID sets the UID field from an event body. Only updates if currently empty
+// UpdateBotUID sets the BotUID field from an event body. Only updates if currently empty.
 func (r *Router) UpdateBotUID(body []byte) error {
 	if r.BotUID != "" {
 		return nil
@@ -93,9 +93,8 @@ func getBotUidFromBody(body []byte) (string, error) {
 
 	if len(authorizedUsers.Authorizations) > 0 {
 		return authorizedUsers.Authorizations[0].UserId, nil
-	} else {
-		return "", errors.New("no authorized users in event body")
 	}
+	return "", errors.New("no authorized users in event body")
 }
 
 // SetupDb migrates the shcemas
