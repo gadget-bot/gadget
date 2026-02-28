@@ -56,7 +56,7 @@ func requestLog(code int, r http.Request, denied bool, start time.Time, logger z
 		Str("method", r.Method).
 		Str("code", strconv.Itoa(code)).
 		Str("uri", r.URL.String()).
-		Dur("duration_ms", time.Since(start))
+		Dur("duration", time.Since(start))
 	if denied {
 		event = event.Str("access", "denied")
 	}
@@ -65,7 +65,10 @@ func requestLog(code int, r http.Request, denied bool, start time.Time, logger z
 
 func generateRequestID() string {
 	b := make([]byte, 8)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		log.Error().Err(err).Msg("Failed to generate request ID")
+		return "unknown"
+	}
 	return fmt.Sprintf("%x", b)
 }
 
@@ -118,14 +121,13 @@ func stripBotMention(body string, botUuid string) string {
 	return strings.TrimSpace(strings.ReplaceAll(body, "<@"+botUuid+">", ""))
 }
 
-func safeGo(routeName string, requestID string, fn func()) {
+func safeGo(routeName string, logger zerolog.Logger, fn func()) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Error().
+				logger.Error().
 					Interface("panic", r).
 					Str("route", routeName).
-					Str("request_id", requestID).
 					Str("stack", string(debug.Stack())).
 					Msg("Plugin panicked")
 			}
@@ -300,7 +302,7 @@ func (gadget Gadget) Handler() http.Handler {
 
 				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
 
-				safeGo(route.Name, requestID, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
+				safeGo(route.Name, logger, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
 			case *slackevents.MessageEvent:
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
@@ -310,7 +312,7 @@ func (gadget Gadget) Handler() http.Handler {
 					return
 				}
 
-				safeGo(route.Name, requestID, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
+				safeGo(route.Name, logger, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
 			}
 		}
 	})
@@ -356,7 +358,7 @@ func (gadget Gadget) Handler() http.Handler {
 			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Permission denied."}`)); err != nil {
 				logger.Error().Err(err).Msg("Failed to write permission denied response")
 			}
-			safeGo(gadget.Router.DeniedSlashCommandRoute.Name, requestID, func() {
+			safeGo(gadget.Router.DeniedSlashCommandRoute.Name, logger, func() {
 				gadget.Router.DeniedSlashCommandRoute.Execute(gadget.Router, *gadget.Client, cmd)
 			})
 			return
@@ -377,7 +379,7 @@ func (gadget Gadget) Handler() http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(resp)
 		}
-		safeGo(route.Name, requestID, func() { route.Execute(gadget.Router, *gadget.Client, cmd) })
+		safeGo(route.Name, logger, func() { route.Execute(gadget.Router, *gadget.Client, cmd) })
 		if route.ImmediateResponse == "" {
 			w.WriteHeader(http.StatusOK)
 		}
