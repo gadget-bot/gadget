@@ -27,14 +27,16 @@ func TestFallbackPlugin_PostsMessage(t *testing.T) {
 	var postedMessage string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/chat.postMessage" {
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+			_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
