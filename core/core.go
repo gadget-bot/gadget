@@ -418,6 +418,13 @@ func (gadget Gadget) Handler() http.Handler {
 
 func (gadget Gadget) Run() error {
 	handler := gadget.Handler()
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%s", getListenPort()),
+		Handler:      handler,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 	log.Info().Str("port", getListenPort()).Msg("Server listening")
-	return http.ListenAndServe(fmt.Sprintf(":%s", getListenPort()), handler)
+	return srv.ListenAndServe()
 }
