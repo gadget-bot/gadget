@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestThreadReplyOption_NonEmpty(t *testing.T) {
@@ -110,4 +112,162 @@ func TestAddReaction_NoErrorOnSuccess(t *testing.T) {
 	AddReaction(*api, "C123", "test_plugin", "thumbsup", "1234567890.123456")
 
 	assert.Empty(t, buf.String())
+}
+
+// newConversationListServer returns a test server that serves paginated
+// conversations.list responses. Each call to pages consumes the next page.
+func newConversationListServer(t *testing.T, pages []string) slack.Client {
+	t.Helper()
+	call := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if call < len(pages) {
+			_, _ = w.Write([]byte(pages[call]))
+		} else {
+			_, _ = w.Write([]byte(`{"ok":true,"channels":[],"response_metadata":{"next_cursor":""}}`))
+		}
+		call++
+	}))
+	t.Cleanup(ts.Close)
+	api := slack.New("xoxb-fake-token", slack.OptionAPIURL(ts.URL+"/"))
+	return *api
+}
+
+// newMultiHandlerServer returns a test server that routes requests by path.
+func newMultiHandlerServer(t *testing.T, handlers map[string]http.HandlerFunc) slack.Client {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h, ok := handlers[r.URL.Path]; ok {
+			h(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":false,"error":"unexpected_path"}`))
+	}))
+	t.Cleanup(ts.Close)
+	api := slack.New("xoxb-fake-token", slack.OptionAPIURL(ts.URL+"/"))
+	return *api
+}
+
+func channelListJSONWithMembership(id, name string, isMember bool, cursor string) string {
+	member := "false"
+	if isMember {
+		member = "true"
+	}
+	return fmt.Sprintf(
+		`{"ok":true,"channels":[{"id":%q,"name":%q,"name_normalized":%q,"is_member":%s}],"response_metadata":{"next_cursor":%q}}`,
+		id, name, name, member, cursor,
+	)
+}
+
+func channelListJSON(id, name, cursor string) string {
+	nextCursor := ""
+	if cursor != "" {
+		nextCursor = cursor
+	}
+	return fmt.Sprintf(
+		`{"ok":true,"channels":[{"id":%q,"name":%q,"name_normalized":%q}],"response_metadata":{"next_cursor":%q}}`,
+		id, name, name, nextCursor,
+	)
+}
+
+func emptyChannelListJSON() string {
+	return `{"ok":true,"channels":[],"response_metadata":{"next_cursor":""}}`
+}
+
+func TestGetJoinedChannels_ReturnsMemberChannels(t *testing.T) {
+	// Two pages: first has one member and one non-member, second has one member.
+	page1 := `{"ok":true,"channels":[{"id":"C001","name":"general","name_normalized":"general","is_member":true},{"id":"C002","name":"random","name_normalized":"random","is_member":false}],"response_metadata":{"next_cursor":"cursor-page2"}}`
+	page2 := channelListJSONWithMembership("C003", "spam-feed", true, "")
+	api := newConversationListServer(t, []string{page1, page2})
+	channels, err := GetJoinedChannels(api)
+	require.NoError(t, err)
+	require.Len(t, channels, 2)
+	assert.Equal(t, "C001", channels[0].ID)
+	assert.Equal(t, "C003", channels[1].ID)
+}
+
+func TestGetJoinedChannels_EmptyWhenNoneJoined(t *testing.T) {
+	api := newConversationListServer(t, []string{emptyChannelListJSON()})
+	channels, err := GetJoinedChannels(api)
+	require.NoError(t, err)
+	assert.Empty(t, channels)
+}
+
+func TestGetJoinedChannels_APIError(t *testing.T) {
+	api := newErrorAPI(t)
+	_, err := GetJoinedChannels(api)
+	assert.ErrorContains(t, err, "listing conversations")
+}
+
+func TestFindChannelByName_Found(t *testing.T) {
+	api := newConversationListServer(t, []string{
+		channelListJSON("C001", "spam-feed", ""),
+	})
+	ch, err := FindChannelByName(api, "spam-feed")
+	require.NoError(t, err)
+	assert.Equal(t, "C001", ch.ID)
+	assert.Equal(t, "spam-feed", ch.NameNormalized)
+}
+
+func TestFindChannelByName_FoundAfterPagination(t *testing.T) {
+	api := newConversationListServer(t, []string{
+		channelListJSON("C001", "general", "cursor-page2"),
+		channelListJSON("C002", "spam-feed", ""),
+	})
+	ch, err := FindChannelByName(api, "spam-feed")
+	require.NoError(t, err)
+	assert.Equal(t, "C002", ch.ID)
+}
+
+func TestFindChannelByName_NotFound(t *testing.T) {
+	api := newConversationListServer(t, []string{
+		channelListJSON("C001", "general", ""),
+	})
+	_, err := FindChannelByName(api, "spam-feed")
+	assert.ErrorContains(t, err, "channel not found: spam-feed")
+}
+
+func TestFindChannelByName_APIError(t *testing.T) {
+	api := newErrorAPI(t)
+	_, err := FindChannelByName(api, "spam-feed")
+	assert.ErrorContains(t, err, "listing conversations")
+}
+
+func TestJoinChannelByName_Success(t *testing.T) {
+	api := newMultiHandlerServer(t, map[string]http.HandlerFunc{
+		"/conversations.list": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(channelListJSON("C001", "spam-feed", "")))
+		},
+		"/conversations.join": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true,"channel":{"id":"C001","name":"spam-feed"}}`))
+		},
+	})
+	err := JoinChannelByName(api, "spam-feed")
+	assert.NoError(t, err)
+}
+
+func TestJoinChannelByName_ChannelNotFound(t *testing.T) {
+	api := newConversationListServer(t, []string{emptyChannelListJSON()})
+	err := JoinChannelByName(api, "spam-feed")
+	assert.ErrorContains(t, err, "channel not found: spam-feed")
+}
+
+func TestJoinChannelByName_JoinError(t *testing.T) {
+	api := newMultiHandlerServer(t, map[string]http.HandlerFunc{
+		"/conversations.list": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(channelListJSON("C001", "spam-feed", "")))
+		},
+		"/conversations.join": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":false,"error":"cant_join_channel"}`))
+		},
+	})
+	err := JoinChannelByName(api, "spam-feed")
+	assert.ErrorContains(t, err, "joining channel spam-feed")
 }
