@@ -16,5 +16,7 @@ func main() {
 
 	// This launches your bot
 
-	myBot.Run()
+	if err := myBot.Run(); err != nil {
+		log.Fatal().Err(err).Msg("Bot stopped")
+	}
 }

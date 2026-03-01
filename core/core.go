@@ -66,7 +66,10 @@ func requestLog(code int, r http.Request, denied bool, start time.Time, logger z
 
 func generateRequestID() string {
 	b := make([]byte, 8)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		log.Error().Err(err).Msg("Failed to generate random request ID")
+		return fmt.Sprintf("%x", time.Now().UnixNano())
+	}
 	return hex.EncodeToString(b)
 }
 
@@ -205,7 +208,9 @@ func Setup() (*Gadget, error) {
 	log.Debug().Str("version", version).Msg("Connected to DB")
 
 	gadget.Router.DbConnection = db
-	gadget.Router.SetupDb()
+	if err := gadget.Router.SetupDb(); err != nil {
+		return &gadget, fmt.Errorf("setup database: %w", err)
+	}
 
 	var globalAdmins models.Group
 	var globalAdminUsers []models.User
@@ -217,7 +222,9 @@ func Setup() (*Gadget, error) {
 	}
 
 	db.Where(models.Group{Name: "globalAdmins"}).FirstOrCreate(&globalAdmins)
-	db.Model(&globalAdmins).Association("Members").Replace(globalAdminUsers)
+	if err := db.Model(&globalAdmins).Association("Members").Replace(globalAdminUsers); err != nil {
+		return &gadget, fmt.Errorf("replace global admin members: %w", err)
+	}
 
 	return &gadget, nil
 }
@@ -272,7 +279,9 @@ func (gadget Gadget) Handler() http.Handler {
 				return
 			}
 			w.Header().Set("Content-Type", "text")
-			w.Write([]byte(res.Challenge))
+			if _, err := w.Write([]byte(res.Challenge)); err != nil {
+				logger.Error().Err(err).Msg("Failed to write URL verification challenge response")
+			}
 		}
 
 		if eventsAPIEvent.Type == slackevents.CallbackEvent {
@@ -359,7 +368,9 @@ func (gadget Gadget) Handler() http.Handler {
 		route, exists := gadget.Router.FindSlashCommandRouteByCommand(cmd.Command)
 		if !exists {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"response_type":"ephemeral","text":"Unknown command."}`))
+			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Unknown command."}`)); err != nil {
+				logger.Error().Err(err).Msg("Failed to write unknown command response")
+			}
 			return
 		}
 
@@ -392,7 +403,9 @@ func (gadget Gadget) Handler() http.Handler {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(resp)
+			if _, err := w.Write(resp); err != nil {
+				logger.Error().Err(err).Msg("Failed to write immediate response")
+			}
 		}
 		safeGo(route.Name, logger, func() { route.Execute(gadget.Router, *gadget.Client, cmd) })
 		if route.ImmediateResponse == "" {

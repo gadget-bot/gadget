@@ -11,6 +11,7 @@ import (
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -98,16 +99,18 @@ func TestGetMyGroups_PostsGroupList(t *testing.T) {
 	db.Create(&user)
 	group := models.Group{Name: "deployers"}
 	db.Create(&group)
-	db.Model(&group).Association("Members").Append(&user)
+	require.NoError(t, db.Model(&group).Association("Members").Append(&user))
 
 	var messages []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/chat.postMessage" {
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			messages = append(messages, r.FormValue("text"))
 		}
-		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+		_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
@@ -137,10 +140,12 @@ func TestGetMyGroups_NoGroups(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/chat.postMessage" {
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			messages = append(messages, r.FormValue("text"))
 		}
-		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+		_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
@@ -168,13 +173,17 @@ func TestAddUserToGroup_AddsSuccessfully(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/reactions.add":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			addedReaction = r.FormValue("name")
 		case "/chat.postMessage":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
 		}
-		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+		_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
@@ -211,16 +220,18 @@ func TestRemoveUserFromGroup_RemovesSuccessfully(t *testing.T) {
 	db.Create(&user)
 	group := models.Group{Name: "deployers"}
 	db.Create(&group)
-	db.Model(&group).Association("Members").Append(&user)
+	require.NoError(t, db.Model(&group).Association("Members").Append(&user))
 
 	var postedMessage string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/chat.postMessage" {
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
 		}
-		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+		_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
@@ -251,10 +262,12 @@ func TestRemoveUserFromGroup_NonexistentGroup(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/chat.postMessage" {
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
 		}
-		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+		_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
@@ -286,10 +299,12 @@ func TestGetAllGroups_PostsAllGroups(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/chat.postMessage" {
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			messages = append(messages, r.FormValue("text"))
 		}
-		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+		_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
@@ -318,16 +333,18 @@ func TestAddUserToGroup_UserAlreadyInGroup(t *testing.T) {
 	db.Create(&user)
 	group := models.Group{Name: "deployers"}
 	db.Create(&group)
-	db.Model(&group).Association("Members").Append(&user)
+	require.NoError(t, db.Model(&group).Association("Members").Append(&user))
 
 	var postedMessage string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/chat.postMessage" {
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
 		}
-		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+		_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
@@ -364,10 +381,12 @@ func TestRemoveUserFromGroup_UserNotAMember(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/chat.postMessage" {
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
 		}
-		w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+		_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
