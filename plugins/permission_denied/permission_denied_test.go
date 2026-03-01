@@ -54,15 +54,19 @@ func TestMentionPlugin_AddsReactionAndPostsMessage(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/reactions.add":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			addedReaction = r.FormValue("name")
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`)) //nolint:errcheck // test HTTP response on loopback
 		case "/chat.postMessage":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
-			w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+			_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 		default:
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`)) //nolint:errcheck // test HTTP response on loopback
 		}
 	}))
 	defer server.Close()
@@ -90,15 +94,19 @@ func TestChannelMessagePlugin_AddsReactionAndPostsMessage(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/reactions.add":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			addedReaction = r.FormValue("name")
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`)) //nolint:errcheck // test HTTP response on loopback
 		case "/chat.postMessage":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
-			w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+			_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 		default:
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`)) //nolint:errcheck // test HTTP response on loopback
 		}
 	}))
 	defer server.Close()

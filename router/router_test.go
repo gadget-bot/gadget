@@ -7,6 +7,7 @@ import (
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -331,7 +332,7 @@ func TestCan_GlobalAdminAllowed(t *testing.T) {
 	db.Create(&user)
 	group := models.Group{Name: "globalAdmins"}
 	db.Create(&group)
-	db.Model(&group).Association("Members").Append(&user)
+	require.NoError(t, db.Model(&group).Association("Members").Append(&user))
 
 	assert.True(t, r.Can(user, []string{"some_permission"}))
 }
@@ -367,7 +368,7 @@ func TestCan_UserInMatchingGroup(t *testing.T) {
 	db.Create(&user)
 	group := models.Group{Name: "deployers"}
 	db.Create(&group)
-	db.Model(&group).Association("Members").Append(&user)
+	require.NoError(t, db.Model(&group).Association("Members").Append(&user))
 
 	assert.True(t, r.Can(user, []string{"deployers"}))
 }
@@ -381,7 +382,7 @@ func TestCan_UserInNonMatchingGroup(t *testing.T) {
 	db.Create(&user)
 	group := models.Group{Name: "viewers"}
 	db.Create(&group)
-	db.Model(&group).Association("Members").Append(&user)
+	require.NoError(t, db.Model(&group).Association("Members").Append(&user))
 
 	assert.False(t, r.Can(user, []string{"deployers"}))
 }
@@ -397,8 +398,8 @@ func TestCan_UserInMultipleGroupsOneMatching(t *testing.T) {
 	deployers := models.Group{Name: "deployers"}
 	db.Create(&viewers)
 	db.Create(&deployers)
-	db.Model(&viewers).Association("Members").Append(&user)
-	db.Model(&deployers).Association("Members").Append(&user)
+	require.NoError(t, db.Model(&viewers).Association("Members").Append(&user))
+	require.NoError(t, db.Model(&deployers).Association("Members").Append(&user))
 
 	assert.True(t, r.Can(user, []string{"deployers"}))
 }

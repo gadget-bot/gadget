@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/gadget-bot/gadget/models"
+	"github.com/rs/zerolog/log"
 
 	"gorm.io/gorm"
 )
@@ -102,10 +103,14 @@ func getBotUidFromBody(body []byte) (string, error) {
 }
 
 // SetupDb migrates the schemas
-func (router Router) SetupDb() {
-	// Migrate the schema
-	router.DbConnection.AutoMigrate(&models.Group{})
-	router.DbConnection.AutoMigrate(&models.User{})
+func (router Router) SetupDb() error {
+	if err := router.DbConnection.AutoMigrate(&models.Group{}); err != nil {
+		return fmt.Errorf("auto-migrate Group: %w", err)
+	}
+	if err := router.DbConnection.AutoMigrate(&models.User{}); err != nil {
+		return fmt.Errorf("auto-migrate User: %w", err)
+	}
+	return nil
 }
 
 // FindChannelMessageRouteByName looks up and return the ChannelMessageRoute by the provided Name field value
@@ -171,7 +176,10 @@ func (router Router) Can(u models.User, permissions []string) bool {
 	var userGroupNames []string
 	var userGroups []models.Group
 
-	router.DbConnection.Model(&u).Association("Groups").Find(&userGroups)
+	if err := router.DbConnection.Model(&u).Association("Groups").Find(&userGroups); err != nil {
+		log.Error().Err(err).Str("user", u.Uuid).Msg("Failed to load user groups for permission check")
+		return false
+	}
 
 	for _, userGroup := range userGroups {
 		// If the user is a global admin, let them through
