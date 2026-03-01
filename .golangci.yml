@@ -1,9 +1,14 @@
 version: "2"
 
+formatters:
+  enable:
+    - goimports
 linters:
   default: none
   enable:
+    - errcheck
     - govet
+    - ineffassign
     - staticcheck
     - unused
-    - ineffassign
+    - zerologlint

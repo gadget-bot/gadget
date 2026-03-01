@@ -1,19 +1,15 @@
-COMMIT_HASH ?= $(shell git rev-parse --short HEAD 2>/dev/null)
-GITVERSION  ?= $(shell git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null || echo "v0.0.0-$(COMMIT_HASH)")
-
 GO          ?= go
 GOOS        ?= $(shell $(GO) env GOOS)
 GOARCH      ?= $(shell $(GO) env GOARCH)
-PACKAGENAME := $(shell go list -m -f '{{.Path}}')
-GOLDFLAGS   ?= -s -w -X $(PACKAGENAME)/conf.Executable=$(EXECUTABLE) -X $(PACKAGENAME)/conf.GitVersion=$(GITVERSION)
-GOBUILD     ?= CGO_ENABLED=0 $(GO) build -ldflags="$(GOLDFLAGS)"
-GO_FILES    := $(shell find . -type f -name '*.go')
+PACKAGENAME := $(shell $(GO) list -m -f '{{.Path}}')
+GOBUILD     ?= CGO_ENABLED=0 $(GO) build
+GO_FILES    := $(shell find . -type f -name '*.go' -not -path './vendor/*')
 
 EXECUTABLE  := gadget
 ARTIFACT    := dist/$(GOOS)-$(GOARCH)/$(EXECUTABLE)
 
-DB_PASS      ?= $(shell openssl rand -hex 16)
-DB_ROOT_PASS ?= $(shell openssl rand -hex 16)
+DB_PASS      ?= gadget
+DB_ROOT_PASS ?= gadget
 
 .PHONY: all
 all: clean verify lint test build
@@ -21,11 +17,11 @@ all: clean verify lint test build
 ###############
 ##@ Development
 
-# This is to allow make to detect when other targes should be rerun (source changes)
+# This is to allow make to detect when other targets should be rerun (source changes)
 $(GO_FILES):
-	@stat -c "%y %n" "$@"
+	@ls -l "$@"
 
-.PHONY: $(EXECUTABLE)
+.PHONY: build
 build: $(ARTIFACT) ## Build binary
 $(ARTIFACT): $(GO_FILES)
 	@$(MAKE) --no-print-directory log-build
@@ -41,14 +37,18 @@ container: ## Build container using docker
 	@$(MAKE) --no-print-directory log-$@
 	@docker build -t gadget:local .
 
-.PHONY: lint ## Lint the project
-lint:
+.PHONY: fmt
+fmt: ## Check the project follows idiomatic formatting
+	@$(MAKE) --no-print-directory	log-$@
+	@golangci-lint fmt --diff
+
+.PHONY: lint
+lint: fmt ## Lint the project
 	@$(MAKE) --no-print-directory log-$@
-	@golangci-lint run ./...
+	@golangci-lint run
 
 .PHONY: test
-test: coverage.out ## Execute tests
-coverage.out: $(GO_FILES)
+test: $(GO_FILES) ## Execute tests
 	@$(MAKE) --no-print-directory log-$@
 	$(GO) test -coverprofile=coverage.out -covermode=atomic -v ./...
 
@@ -61,7 +61,7 @@ clean: ## Clean the workspace including modcache and dist/
 .PHONY: tools
 tools: ## Install tools needed for development
 	@$(MAKE) --no-print-directory log-$@
-	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
+	@$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
 
 ###############
 ##@ Database
