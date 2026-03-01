@@ -40,7 +40,7 @@ func userInfo() *router.MentionRoute {
 			"Polar Bear",
 		}
 
-		randomIndex := rand.IntN(len(animals))
+		randomIndex := rand.IntN(len(animals)) //nolint:gosec // G404: random animal selection has no security requirement
 		randomAnimal := animals[randomIndex]
 
 		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
