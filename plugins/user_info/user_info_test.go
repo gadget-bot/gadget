@@ -61,7 +61,7 @@ func TestUserInfoPlugin_PostsUserDetails(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/users.info":
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"ok": true,
 				"user": {
 					"id": "u456",
@@ -71,13 +71,15 @@ func TestUserInfoPlugin_PostsUserDetails(t *testing.T) {
 					"locale": "en-US",
 					"profile": {"email": "test@example.com"}
 				}
-			}`))
+			}`)) //nolint:errcheck // test HTTP response on loopback
 		case "/chat.postMessage":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
-			w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+			_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 		default:
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`)) //nolint:errcheck // test HTTP response on loopback
 		}
 	}))
 	defer server.Close()
@@ -107,13 +109,15 @@ func TestUserInfoPlugin_UserNotFound(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/users.info":
-			w.Write([]byte(`{"ok":false,"error":"user_not_found"}`))
+			_, _ = w.Write([]byte(`{"ok":false,"error":"user_not_found"}`)) //nolint:errcheck // test HTTP response on loopback
 		case "/chat.postMessage":
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			postedMessage = r.FormValue("text")
-			w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`))
+			_, _ = w.Write([]byte(`{"ok":true,"channel":"C123","ts":"1234567890.123456"}`)) //nolint:errcheck // test HTTP response on loopback
 		default:
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`)) //nolint:errcheck // test HTTP response on loopback
 		}
 	}))
 	defer server.Close()
