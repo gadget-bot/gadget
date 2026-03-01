@@ -1,6 +1,0 @@
-version: 1.0
-stages:
-  build:
-    image: docker:19.03
-  test:
-    image: golang:1
