@@ -94,7 +94,13 @@ func addUserToGroup() *router.MentionRoute {
 
 		router.DbConnection.Where(models.Group{Name: groupName}).FirstOrCreate(&foundGroup)
 		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
-		router.DbConnection.Model(&foundGroup).Association("Members").Append(&foundUser)
+		if err := router.DbConnection.Model(&foundGroup).Association("Members").Append(&foundUser); err != nil {
+			helpers.PostMessage(api, ev.Channel, "groups.addUserToGroup",
+				slack.MsgOptionText(fmt.Sprintf("Failed to add <@%s> to %s: %s", userName, groupName, err), false),
+				helpers.ThreadReplyOption(ev.ThreadTimeStamp),
+			)
+			return
+		}
 
 		helpers.PostMessage(api, ev.Channel, "groups.addUserToGroup",
 			slack.MsgOptionText(fmt.Sprintf("I successfully added <@%s> to %s!", userName, groupName), false),
@@ -138,8 +144,11 @@ func removeUserFromGroup() *router.MentionRoute {
 			}
 
 			if wasMember {
-				router.DbConnection.Model(&foundGroup).Association("Members").Replace(newMembersList)
-				response = fmt.Sprintf("<@%s> is no longer a member of %s!", userName, groupName)
+				if err := router.DbConnection.Model(&foundGroup).Association("Members").Replace(newMembersList); err != nil {
+					response = fmt.Sprintf("Failed to remove <@%s> from %s: %s", userName, groupName, err)
+				} else {
+					response = fmt.Sprintf("<@%s> is no longer a member of %s!", userName, groupName)
+				}
 			} else {
 				response = fmt.Sprintf("It doesn't look like <@%s> is a member of %s.", userName, groupName)
 			}

@@ -14,7 +14,7 @@ func TestUserInfo_ReturnsNilOnAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":false,"error":"user_not_found"}`))
+		_, _ = w.Write([]byte(`{"ok":false,"error":"user_not_found"}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
@@ -30,7 +30,7 @@ func TestUserInfo_ReturnsUserOnSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"ok": true,
 			"user": {
 				"id": "U123",
@@ -42,7 +42,7 @@ func TestUserInfo_ReturnsUserOnSuccess(t *testing.T) {
 					"email": "test@example.com"
 				}
 			}
-		}`))
+		}`)) //nolint:errcheck // test HTTP response on loopback
 	}))
 	defer server.Close()
 
