@@ -168,25 +168,19 @@ func (router Router) FindMentionRouteByMessage(message string) (MentionRoute, bo
 
 // Can Returns true if `u` possesses the provided permissions
 func (router Router) Can(u models.User, permissions []string) bool {
-	isAllowed := false
 	var userGroupNames []string
 	var userGroups []models.Group
 
 	router.DbConnection.Model(&u).Association("Groups").Find(&userGroups)
 
 	for _, userGroup := range userGroups {
-		groupName := userGroup.Name
 		// If the user is a global admin, let them through
-		if groupName == "globalAdmins" {
-			isAllowed = true
-			break
+		if userGroup.Name == "globalAdmins" {
+			return true
 		}
 		userGroupNames = append(userGroupNames, userGroup.Name)
 	}
 
-	if isAllowed {
-		return true
-	}
 	if len(permissions) == 0 {
 		// if no permissions are defined, assume it is open/allow all
 		return true
