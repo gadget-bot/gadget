@@ -18,16 +18,16 @@ func getMyGroups() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "*")
 	pluginRoute.Name = "groups.getMyGroups"
 	pluginRoute.Pattern = `(?i)^((list )?my groups|which groups am I (in|a member of))[.?]?$`
-	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+	pluginRoute.Plugin = func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
 		threadOpt := helpers.ThreadReplyOption(ev.ThreadTimeStamp)
 
-		helpers.PostMessage(api, ev.Channel, "groups.getMyGroups",
+		helpers.PostMessage(*ctx.BotClient, ev.Channel, "groups.getMyGroups",
 			slack.MsgOptionText("Here are your groups, <@"+ev.User+">:", false),
 			threadOpt,
 		)
 
 		var currentUser models.User
-		router.DbConnection.Preload("Groups").FirstOrCreate(&currentUser, models.User{Uuid: ev.User})
+		ctx.Router.DbConnection.Preload("Groups").FirstOrCreate(&currentUser, models.User{Uuid: ev.User})
 
 		var response string
 		groupList := currentUser.Groups
@@ -40,7 +40,7 @@ func getMyGroups() *router.MentionRoute {
 			response = "You don't seem to be a member of _any_ groups. Bummer."
 		}
 
-		helpers.PostMessage(api, ev.Channel, "groups.getMyGroups",
+		helpers.PostMessage(*ctx.BotClient, ev.Channel, "groups.getMyGroups",
 			slack.MsgOptionText(response, false),
 			threadOpt,
 		)
@@ -53,16 +53,16 @@ func getAllGroups() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "admins")
 	pluginRoute.Name = "groups.getAllGroups"
 	pluginRoute.Pattern = `(?i)^(list|list all|all) groups\.?$`
-	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+	pluginRoute.Plugin = func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
 		var groups []models.Group
 		threadOpt := helpers.ThreadReplyOption(ev.ThreadTimeStamp)
 
-		helpers.PostMessage(api, ev.Channel, "groups.getAllGroups",
+		helpers.PostMessage(*ctx.BotClient, ev.Channel, "groups.getAllGroups",
 			slack.MsgOptionText("Here are *all* the groups I know about:", false),
 			threadOpt,
 		)
 
-		router.DbConnection.Find(&groups)
+		ctx.Router.DbConnection.Find(&groups)
 
 		var response string
 
@@ -70,7 +70,7 @@ func getAllGroups() *router.MentionRoute {
 			response += fmt.Sprintf("*-* %s\n", group.Name)
 		}
 
-		helpers.PostMessage(api, ev.Channel, "groups.getAllGroups",
+		helpers.PostMessage(*ctx.BotClient, ev.Channel, "groups.getAllGroups",
 			slack.MsgOptionText(response, false),
 			threadOpt,
 		)
@@ -83,26 +83,26 @@ func addUserToGroup() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "admins")
 	pluginRoute.Name = "groups.addUserToGroup"
 	pluginRoute.Pattern = `(?i)^add <@([a-z0-9]+)> to( group)? ([a-z0-9]+)\.?$`
-	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
-		helpers.AddReaction(api, ev.Channel, "groups.addUserToGroup", "tada", ev.TimeStamp)
+	pluginRoute.Plugin = func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
+		helpers.AddReaction(*ctx.BotClient, ev.Channel, "groups.addUserToGroup", "tada", ev.TimeStamp)
 
-		results := route.CompiledPattern.FindStringSubmatch(message)
+		results := ctx.Route.CompiledPattern.FindStringSubmatch(message)
 		userName := results[1]
 		groupName := results[3]
 		var foundGroup models.Group
 		var foundUser models.User
 
-		router.DbConnection.Where(models.Group{Name: groupName}).FirstOrCreate(&foundGroup)
-		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
-		if err := router.DbConnection.Model(&foundGroup).Association("Members").Append(&foundUser); err != nil {
-			helpers.PostMessage(api, ev.Channel, "groups.addUserToGroup",
+		ctx.Router.DbConnection.Where(models.Group{Name: groupName}).FirstOrCreate(&foundGroup)
+		ctx.Router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
+		if err := ctx.Router.DbConnection.Model(&foundGroup).Association("Members").Append(&foundUser); err != nil {
+			helpers.PostMessage(*ctx.BotClient, ev.Channel, "groups.addUserToGroup",
 				slack.MsgOptionText(fmt.Sprintf("Failed to add <@%s> to %s: %s", userName, groupName, err), false),
 				helpers.ThreadReplyOption(ev.ThreadTimeStamp),
 			)
 			return
 		}
 
-		helpers.PostMessage(api, ev.Channel, "groups.addUserToGroup",
+		helpers.PostMessage(*ctx.BotClient, ev.Channel, "groups.addUserToGroup",
 			slack.MsgOptionText(fmt.Sprintf("I successfully added <@%s> to %s!", userName, groupName), false),
 			helpers.ThreadReplyOption(ev.ThreadTimeStamp),
 		)
@@ -115,10 +115,10 @@ func removeUserFromGroup() *router.MentionRoute {
 	pluginRoute.Permissions = append(pluginRoute.Permissions, "admins")
 	pluginRoute.Name = "groups.removeUserFromGroup"
 	pluginRoute.Pattern = `(?i)^remove <@([a-z0-9]+)> from( group)? ([a-z0-9]+)\.?$`
-	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
-		helpers.AddReaction(api, ev.Channel, "groups.removeUserFromGroup", "slightly_frowning_face", ev.TimeStamp)
+	pluginRoute.Plugin = func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
+		helpers.AddReaction(*ctx.BotClient, ev.Channel, "groups.removeUserFromGroup", "slightly_frowning_face", ev.TimeStamp)
 
-		results := route.CompiledPattern.FindStringSubmatch(message)
+		results := ctx.Route.CompiledPattern.FindStringSubmatch(message)
 		userName := results[1]
 		groupName := results[3]
 		var foundGroup models.Group
@@ -126,8 +126,8 @@ func removeUserFromGroup() *router.MentionRoute {
 		var response string
 		var wasMember bool
 
-		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
-		groupQueryResult := router.DbConnection.Preload("Members").Where(models.Group{Name: groupName}).First(&foundGroup)
+		ctx.Router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
+		groupQueryResult := ctx.Router.DbConnection.Preload("Members").Where(models.Group{Name: groupName}).First(&foundGroup)
 
 		if errors.Is(groupQueryResult.Error, gorm.ErrRecordNotFound) {
 			response = fmt.Sprintf("I couldn't find a group named '%s'.", groupName)
@@ -144,7 +144,7 @@ func removeUserFromGroup() *router.MentionRoute {
 			}
 
 			if wasMember {
-				if err := router.DbConnection.Model(&foundGroup).Association("Members").Replace(newMembersList); err != nil {
+				if err := ctx.Router.DbConnection.Model(&foundGroup).Association("Members").Replace(newMembersList); err != nil {
 					response = fmt.Sprintf("Failed to remove <@%s> from %s: %s", userName, groupName, err)
 				} else {
 					response = fmt.Sprintf("<@%s> is no longer a member of %s!", userName, groupName)
@@ -154,7 +154,7 @@ func removeUserFromGroup() *router.MentionRoute {
 			}
 		}
 
-		helpers.PostMessage(api, ev.Channel, "groups.removeUserFromGroup",
+		helpers.PostMessage(*ctx.BotClient, ev.Channel, "groups.removeUserFromGroup",
 			slack.MsgOptionText(response, false),
 			helpers.ThreadReplyOption(ev.ThreadTimeStamp),
 		)

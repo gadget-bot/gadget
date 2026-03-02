@@ -308,6 +308,12 @@ func (gadget Gadget) Handler() http.Handler {
 			var currentUser models.User
 			gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: eventUser})
 
+			ctx := router.HandlerContext{
+				Router:    gadget.Router,
+				BotClient: gadget.Client,
+				Logger:    logger,
+			}
+
 			switch ev := innerEvent.Data.(type) {
 			case *slackevents.AppMentionEvent:
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
@@ -324,7 +330,7 @@ func (gadget Gadget) Handler() http.Handler {
 
 				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
 
-				safeGo(route.Name, logger, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
+				safeGo(route.Name, logger, func() { route.Execute(ctx, *ev, trimmedMessage) })
 			case *slackevents.MessageEvent:
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
@@ -341,7 +347,7 @@ func (gadget Gadget) Handler() http.Handler {
 				}
 
 				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
-				safeGo(route.Name, logger, func() { route.Execute(gadget.Router, *gadget.Client, *ev, trimmedMessage) })
+				safeGo(route.Name, logger, func() { route.Execute(ctx, *ev, trimmedMessage) })
 			}
 		}
 	})
@@ -381,6 +387,12 @@ func (gadget Gadget) Handler() http.Handler {
 		var currentUser models.User
 		gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: cmd.UserID})
 
+		ctx := router.HandlerContext{
+			Router:    gadget.Router,
+			BotClient: gadget.Client,
+			Logger:    logger,
+		}
+
 		if !gadget.Router.Can(currentUser, route.Permissions) {
 			logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
 			accessDenied = true
@@ -389,7 +401,7 @@ func (gadget Gadget) Handler() http.Handler {
 				logger.Error().Err(err).Msg("Failed to write permission denied response")
 			}
 			safeGo(gadget.Router.DeniedSlashCommandRoute.Name, logger, func() {
-				gadget.Router.DeniedSlashCommandRoute.Execute(gadget.Router, *gadget.Client, cmd)
+				gadget.Router.DeniedSlashCommandRoute.Execute(ctx, cmd)
 			})
 			return
 		}
@@ -411,7 +423,7 @@ func (gadget Gadget) Handler() http.Handler {
 				logger.Error().Err(err).Msg("Failed to write immediate response")
 			}
 		}
-		safeGo(route.Name, logger, func() { route.Execute(gadget.Router, *gadget.Client, cmd) })
+		safeGo(route.Name, logger, func() { route.Execute(ctx, cmd) })
 		if route.ImmediateResponse == "" {
 			w.WriteHeader(http.StatusOK)
 		}

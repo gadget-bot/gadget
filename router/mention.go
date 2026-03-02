@@ -1,21 +1,21 @@
 package router
 
 import (
-	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
 
 type MentionRoute struct {
 	Route
-	Plugin func(router Router, route Route, api slack.Client, ev slackevents.AppMentionEvent, message string)
+	Plugin func(ctx HandlerContext, ev slackevents.AppMentionEvent, message string)
 }
 
 // mentionRoutesSortedByPriority implements Sort such that those with higher priority are first
 type mentionRoutesSortedByPriority []MentionRoute
 
 // Execute calls Plugin()
-func (route MentionRoute) Execute(router Router, api slack.Client, ev slackevents.AppMentionEvent, message string) {
-	route.Plugin(router, route.Route, api, ev, message)
+func (route MentionRoute) Execute(ctx HandlerContext, ev slackevents.AppMentionEvent, message string) {
+	ctx.Route = route.Route
+	route.Plugin(ctx, ev, message)
 }
 
 func (a mentionRoutesSortedByPriority) Len() int { return len(a) }

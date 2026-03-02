@@ -88,13 +88,17 @@ func TestUserInfoPlugin_PostsUserDetails(t *testing.T) {
 
 	route := userInfo()
 	compileMentionRouteForTest(t, route)
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:    "U_ADMIN",
 		Channel: "C123",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "who is <@u456>")
+	route.Plugin(ctx, ev, "who is <@u456>")
 
 	assert.Contains(t, postedMessage, "Test User")
 	assert.Contains(t, postedMessage, "America/Chicago")
@@ -126,13 +130,17 @@ func TestUserInfoPlugin_UserNotFound(t *testing.T) {
 
 	route := userInfo()
 	compileMentionRouteForTest(t, route)
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:    "U_ADMIN",
 		Channel: "C123",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "who is <@u999>")
+	route.Plugin(ctx, ev, "who is <@u999>")
 
 	assert.Contains(t, postedMessage, "couldn't look up")
 }

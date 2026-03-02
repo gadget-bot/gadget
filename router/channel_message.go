@@ -1,22 +1,22 @@
 package router
 
 import (
-	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
 
 // ChannelMessageRoute handles the `message.channels` Event
 type ChannelMessageRoute struct {
 	Route
-	Plugin func(router Router, route Route, api slack.Client, ev slackevents.MessageEvent, message string)
+	Plugin func(ctx HandlerContext, ev slackevents.MessageEvent, message string)
 }
 
 // channelMessageRoutesSortedByPriority implements Sort such that those with higher priority are first
 type channelMessageRoutesSortedByPriority []ChannelMessageRoute
 
 // Execute calls Plugin()
-func (route ChannelMessageRoute) Execute(router Router, api slack.Client, ev slackevents.MessageEvent, message string) {
-	route.Plugin(router, route.Route, api, ev, message)
+func (route ChannelMessageRoute) Execute(ctx HandlerContext, ev slackevents.MessageEvent, message string) {
+	ctx.Route = route.Route
+	route.Plugin(ctx, ev, message)
 }
 
 func (a channelMessageRoutesSortedByPriority) Len() int { return len(a) }

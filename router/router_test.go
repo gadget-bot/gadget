@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/gadget-bot/gadget/models"
-	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -289,11 +288,11 @@ func TestFindMentionRouteByMessage_UsesCompiledPattern(t *testing.T) {
 	r := NewRouter()
 	r.AddMentionRoute(MentionRoute{
 		Route:  Route{Name: "greet", Pattern: `(?i)^hello`, Priority: 1},
-		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {},
+		Plugin: func(ctx HandlerContext, ev slackevents.AppMentionEvent, message string) {},
 	})
 	r.AddMentionRoute(MentionRoute{
 		Route:  Route{Name: "farewell", Pattern: `(?i)^goodbye`, Priority: 1},
-		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {},
+		Plugin: func(ctx HandlerContext, ev slackevents.AppMentionEvent, message string) {},
 	})
 
 	route, found := r.FindMentionRouteByMessage("Hello there")
@@ -312,7 +311,7 @@ func TestFindChannelMessageRouteByMessage_UsesCompiledPattern(t *testing.T) {
 	r := NewRouter()
 	r.AddChannelMessageRoute(ChannelMessageRoute{
 		Route:  Route{Name: "deploy", Pattern: `(?i)^deploy`, Priority: 1},
-		Plugin: func(router Router, route Route, api slack.Client, ev slackevents.MessageEvent, message string) {},
+		Plugin: func(ctx HandlerContext, ev slackevents.MessageEvent, message string) {},
 	})
 
 	route, found := r.FindChannelMessageRouteByMessage("deploy production")

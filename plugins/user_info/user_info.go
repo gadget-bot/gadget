@@ -19,8 +19,8 @@ func userInfo() *router.MentionRoute {
 	pluginRoute.Description = "Responds with information about a Slack user"
 	pluginRoute.Help = "who is USER"
 	pluginRoute.Pattern = `(?i)^(tell me about|who is) <@([a-z0-9]+)>[.?]?$`
-	pluginRoute.Plugin = func(router router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
-		results := route.CompiledPattern.FindStringSubmatch(message)
+	pluginRoute.Plugin = func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
+		results := ctx.Route.CompiledPattern.FindStringSubmatch(message)
 		userName := results[2]
 		var foundUser models.User
 		var response string
@@ -43,13 +43,13 @@ func userInfo() *router.MentionRoute {
 		randomIndex := rand.IntN(len(animals)) //nolint:gosec // G404: random animal selection has no security requirement
 		randomAnimal := animals[randomIndex]
 
-		router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
+		ctx.Router.DbConnection.Where(models.User{Uuid: userName}).FirstOrCreate(&foundUser)
 
 		threadOpt := helpers.ThreadReplyOption(ev.ThreadTimeStamp)
 
-		slackInfo := foundUser.Info(api)
+		slackInfo := foundUser.Info(*ctx.BotClient)
 		if slackInfo == nil {
-			helpers.PostMessage(api, ev.Channel, "user_info",
+			helpers.PostMessage(*ctx.BotClient, ev.Channel, "user_info",
 				slack.MsgOptionText(fmt.Sprintf("Sorry, I couldn't look up info for <@%s>.", userName), false),
 				threadOpt,
 			)
@@ -61,7 +61,7 @@ func userInfo() *router.MentionRoute {
 		response += fmt.Sprintf("- *Locale:* %s\n", slackInfo.Locale)
 		response += fmt.Sprintf("- *Spirit Animal:* %s\n", randomAnimal)
 
-		helpers.PostMessage(api, ev.Channel, "user_info",
+		helpers.PostMessage(*ctx.BotClient, ev.Channel, "user_info",
 			slack.MsgOptionText(response, false),
 			threadOpt,
 		)
