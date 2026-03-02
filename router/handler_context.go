@@ -8,8 +8,9 @@ import (
 // HandlerContext provides dependencies to plugin handlers.
 // New fields can be added here without changing plugin signatures.
 type HandlerContext struct {
-	Router    Router
-	Route     Route
-	BotClient *slack.Client
-	Logger    zerolog.Logger
+	Router     Router
+	Route      Route
+	BotClient  *slack.Client
+	UserClient *slack.Client // nil if no user token configured
+	Logger     zerolog.Logger
 }

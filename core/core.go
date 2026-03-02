@@ -33,6 +33,7 @@ import (
 // Config holds all configuration needed to initialize a Gadget instance.
 type Config struct {
 	SlackOAuthToken string
+	SlackUserToken  string // optional user-level OAuth token (xoxp-)
 	SigningSecret   string
 	DBUser          string
 	DBPass          string
@@ -46,6 +47,7 @@ type Config struct {
 func ConfigFromEnv() Config {
 	return Config{
 		SlackOAuthToken: os.Getenv("SLACK_OAUTH_TOKEN"),
+		SlackUserToken:  os.Getenv("SLACK_USER_OAUTH_TOKEN"),
 		SigningSecret:   os.Getenv("SLACK_SIGNING_SECRET"),
 		DBUser:          os.Getenv("GADGET_DB_USER"),
 		DBPass:          os.Getenv("GADGET_DB_PASS"),
@@ -59,6 +61,7 @@ func ConfigFromEnv() Config {
 type Gadget struct {
 	Router        router.Router
 	Client        *slack.Client
+	UserClient    *slack.Client // nil if no user token configured
 	signingSecret string
 	listenPort    string
 }
@@ -179,6 +182,9 @@ func SetupWithConfig(cfg Config) (*Gadget, error) {
 	log.Info().Str("level", level.String()).Msg("Log level configured")
 
 	gadget.Client = slack.New(cfg.SlackOAuthToken)
+	if cfg.SlackUserToken != "" {
+		gadget.UserClient = slack.New(cfg.SlackUserToken)
+	}
 	gadget.signingSecret = cfg.SigningSecret
 	gadget.listenPort = cfg.ListenPort
 
@@ -309,9 +315,10 @@ func (gadget Gadget) Handler() http.Handler {
 			gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: eventUser})
 
 			ctx := router.HandlerContext{
-				Router:    gadget.Router,
-				BotClient: gadget.Client,
-				Logger:    logger,
+				Router:     gadget.Router,
+				BotClient:  gadget.Client,
+				UserClient: gadget.UserClient,
+				Logger:     logger,
 			}
 
 			switch ev := innerEvent.Data.(type) {
@@ -388,9 +395,10 @@ func (gadget Gadget) Handler() http.Handler {
 		gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: cmd.UserID})
 
 		ctx := router.HandlerContext{
-			Router:    gadget.Router,
-			BotClient: gadget.Client,
-			Logger:    logger,
+			Router:     gadget.Router,
+			BotClient:  gadget.Client,
+			UserClient: gadget.UserClient,
+			Logger:     logger,
 		}
 
 		if !gadget.Router.Can(currentUser, route.Permissions) {
