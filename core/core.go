@@ -58,12 +58,17 @@ func ConfigFromEnv() Config {
 	}
 }
 
+// Middleware wraps handler execution. Call next(ctx) to continue the chain,
+// or return without calling next to short-circuit.
+type Middleware func(ctx router.HandlerContext, next func(router.HandlerContext))
+
 type Gadget struct {
 	Router        router.Router
 	Client        *slack.Client
 	UserClient    *slack.Client // nil if no user token configured
 	signingSecret string
 	listenPort    string
+	middleware    []Middleware
 }
 
 func requestLog(code int, r http.Request, denied bool, start time.Time, logger zerolog.Logger) {
@@ -157,6 +162,25 @@ func safeGo(routeName string, logger zerolog.Logger, fn func()) {
 		}()
 		fn()
 	}()
+}
+
+// Use appends a middleware to the chain. Middleware is executed in the order added,
+// wrapping every handler invocation (mentions, channel messages, and slash commands).
+func (g *Gadget) Use(mw Middleware) {
+	g.middleware = append(g.middleware, mw)
+}
+
+// buildChain builds a middleware chain ending with fn.
+func (g Gadget) buildChain(fn func(router.HandlerContext)) func(router.HandlerContext) {
+	handler := fn
+	for i := len(g.middleware) - 1; i >= 0; i-- {
+		mw := g.middleware[i]
+		next := handler
+		handler = func(ctx router.HandlerContext) {
+			mw(ctx, next)
+		}
+	}
+	return handler
 }
 
 // Setup creates a new Gadget instance using configuration from environment variables.
@@ -337,7 +361,13 @@ func (gadget Gadget) Handler() http.Handler {
 
 				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
 
-				safeGo(route.Name, logger, func() { route.Execute(ctx, *ev, trimmedMessage) })
+				r := route // capture for closure
+				e := *ev
+				safeGo(r.Name, logger, func() {
+					gadget.buildChain(func(c router.HandlerContext) {
+						r.Execute(c, e, trimmedMessage)
+					})(ctx)
+				})
 			case *slackevents.MessageEvent:
 				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
 				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
@@ -354,7 +384,13 @@ func (gadget Gadget) Handler() http.Handler {
 				}
 
 				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
-				safeGo(route.Name, logger, func() { route.Execute(ctx, *ev, trimmedMessage) })
+				r := route // capture for closure
+				e := *ev
+				safeGo(r.Name, logger, func() {
+					gadget.buildChain(func(c router.HandlerContext) {
+						r.Execute(c, e, trimmedMessage)
+					})(ctx)
+				})
 			}
 		}
 	})
@@ -408,8 +444,11 @@ func (gadget Gadget) Handler() http.Handler {
 			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Permission denied."}`)); err != nil {
 				logger.Error().Err(err).Msg("Failed to write permission denied response")
 			}
-			safeGo(gadget.Router.DeniedSlashCommandRoute.Name, logger, func() {
-				gadget.Router.DeniedSlashCommandRoute.Execute(ctx, cmd)
+			denied := gadget.Router.DeniedSlashCommandRoute
+			safeGo(denied.Name, logger, func() {
+				gadget.buildChain(func(c router.HandlerContext) {
+					denied.Execute(c, cmd)
+				})(ctx)
 			})
 			return
 		}
@@ -431,7 +470,12 @@ func (gadget Gadget) Handler() http.Handler {
 				logger.Error().Err(err).Msg("Failed to write immediate response")
 			}
 		}
-		safeGo(route.Name, logger, func() { route.Execute(ctx, cmd) })
+		cmdRoute := route // capture for closure
+		safeGo(cmdRoute.Name, logger, func() {
+			gadget.buildChain(func(c router.HandlerContext) {
+				cmdRoute.Execute(c, cmd)
+			})(ctx)
+		})
 		if route.ImmediateResponse == "" {
 			w.WriteHeader(http.StatusOK)
 		}

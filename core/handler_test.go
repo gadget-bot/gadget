@@ -471,3 +471,65 @@ func TestSafeGo_RecoversPanic(t *testing.T) {
 	assert.Contains(t, output, "test panic")
 	assert.Contains(t, output, "test-request-id")
 }
+
+func TestMiddleware_CalledAroundHandler(t *testing.T) {
+	g := newTestGadget(t)
+
+	var order []string
+	done := make(chan struct{})
+
+	g.Use(func(ctx router.HandlerContext, next func(router.HandlerContext)) {
+		order = append(order, "before")
+		next(ctx)
+		order = append(order, "after")
+	})
+
+	g.Router.AddMentionRoute(router.MentionRoute{
+		Route: router.Route{
+			Name:    "mw-test",
+			Pattern: `(?i)^hello`,
+		},
+		Plugin: func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
+			order = append(order, "handler")
+			close(done)
+		},
+	})
+	g.Router.BotUID = "U_BOT"
+
+	handler := g.Handler()
+
+	eventPayload := map[string]interface{}{
+		"type":       "event_callback",
+		"token":      "fake",
+		"team_id":    "T123",
+		"api_app_id": "A123",
+		"authorizations": []map[string]string{
+			{"user_id": "U_BOT", "team_id": "T123"},
+		},
+		"event": map[string]interface{}{
+			"type":    "app_mention",
+			"user":    "U_USER",
+			"text":    "<@U_BOT> hello world",
+			"channel": "C123",
+			"ts":      "1234567890.123456",
+		},
+		"event_id":   "Ev200",
+		"event_time": 1234567890,
+	}
+	body, _ := json.Marshal(eventPayload)
+	bodyStr := string(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/gadget", strings.NewReader(bodyStr))
+	signRequest(req, bodyStr)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for handler")
+	}
+
+	assert.Equal(t, []string{"before", "handler", "after"}, order)
+}
