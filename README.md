@@ -56,10 +56,12 @@ Gadget is built around specialized plugins called `Routes`. A Route **must** pro
 * a `Name` (a unique `string`) that is used for logging
 * a `Plugin`, which is the meat of what the Route should do when called. It needs to return a function, but this depends on which type of `Route` is being written. For normal `MentionRoute`s, the returned function must look something like:
 ```golang
-func(api slack.Client, router router.Router, ev slackevents.AppMentionEvent, message string) {
+func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
   // ... do something awesome here ...
 }
 ```
+
+Use `ctx.BotClient` for Slack API calls and `ctx.Router` to access router/db dependencies.
 
 A `Route` can optionally provide:
 
@@ -92,10 +94,10 @@ func rollD6() *router.MentionRoute {
 	pluginRoute.Pattern = `(?i)^roll some dice[!.]?$`
 
 	// Here is where we define what we want this plugin to do
-	pluginRoute.Plugin = func(router router.Router, route router.Route , api slack.Client, ev slackevents.AppMentionEvent, message string) {
+	pluginRoute.Plugin = func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
 		// Here's how we can react to the message
 		msgRef := slack.NewRefToMessage(ev.Channel, ev.TimeStamp)
-		api.AddReaction("game_die", msgRef)
+		ctx.BotClient.AddReaction("game_die", msgRef)
 
 		// Roll some virtual dice
 		dice := []int{1, 2, 3, 4, 5, 6}
@@ -105,7 +107,7 @@ func rollD6() *router.MentionRoute {
 		roll2 := dice[rollIndex2]
 
 		// Here's how we send a reply
-		api.PostMessage(
+		ctx.BotClient.PostMessage(
 			ev.Channel,
 			slack.MsgOptionText(
 				fmt.Sprintf("<@%s> rolled a %d and a %d", ev.User, roll1, roll2),
