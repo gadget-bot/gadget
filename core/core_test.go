@@ -16,6 +16,35 @@ func TestSetupWithConfig_PopulatesClientField(t *testing.T) {
 	assert.NotNil(t, gadget.Client, "Expected gadget.Client to be populated after SetupWithConfig")
 }
 
+func TestSetupWithConfig_UserClientNilWhenNoUserToken(t *testing.T) {
+	gadget, _ := SetupWithConfig(Config{ //nolint:gosec // test credentials
+		SlackOAuthToken: "xoxb-fake-token",
+		SigningSecret:   "fake-secret",
+		ListenPort:      "3000",
+	})
+
+	assert.Nil(t, gadget.UserClient, "Expected gadget.UserClient to be nil without SlackUserToken")
+}
+
+func TestSetupWithConfig_UserClientPopulatedWhenUserTokenProvided(t *testing.T) {
+	gadget, _ := SetupWithConfig(Config{ //nolint:gosec // test credentials
+		SlackOAuthToken: "xoxb-fake-token",
+		SlackUserToken:  "xoxp-fake-token",
+		SigningSecret:   "fake-secret",
+		ListenPort:      "3000",
+	})
+
+	assert.NotNil(t, gadget.UserClient, "Expected gadget.UserClient to be populated with SlackUserToken")
+}
+
+func TestConfigFromEnv_ReadsSlackUserToken(t *testing.T) {
+	t.Setenv("SLACK_USER_OAUTH_TOKEN", "xoxp-from-env")
+
+	cfg := ConfigFromEnv()
+
+	assert.Equal(t, "xoxp-from-env", cfg.SlackUserToken)
+}
+
 func TestGlobalAdminsFromString(t *testing.T) {
 	tests := []struct {
 		name     string

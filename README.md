@@ -160,6 +160,7 @@ If you just want to try Gadget out, you can use the `main.go` in this repo like 
 export GADGET_GLOBAL_ADMINS="U0.....,U1....."
 # These two variables are for connecting to Slack
 export SLACK_OAUTH_TOKEN="xoxb-...."
+export SLACK_USER_OAUTH_TOKEN="xoxp-...." # optional; needed for user-level Slack API calls
 export SLACK_SIGNING_SECRET="a...a"
 # DB Connection details
 export GADGET_DB_USER="gadgetuser"
