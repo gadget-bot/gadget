@@ -38,11 +38,14 @@ func AddReaction(api slack.Client, channel, plugin, reaction, timestamp string) 
 	}
 }
 
+// channelTypes lists the conversation types queried by channel helpers.
+var channelTypes = []string{"public_channel", "private_channel"}
+
 // FindChannelByName searches all conversations for a channel whose
 // NameNormalized matches name, handling pagination internally.
 // Returns the matching channel or an error if not found or if any API call fails.
 func FindChannelByName(api slack.Client, name string) (slack.Channel, error) {
-	params := &slack.GetConversationsParameters{}
+	params := &slack.GetConversationsParameters{Types: channelTypes}
 	for {
 		channels, cursor, err := api.GetConversations(params)
 		if err != nil {
@@ -65,7 +68,7 @@ func FindChannelByName(api slack.Client, name string) (slack.Channel, error) {
 // Pagination is handled internally.
 func GetJoinedChannels(api slack.Client) ([]slack.Channel, error) {
 	var joined []slack.Channel
-	params := &slack.GetConversationsParameters{}
+	params := &slack.GetConversationsParameters{Types: channelTypes}
 	for {
 		channels, cursor, err := api.GetConversations(params)
 		if err != nil {
