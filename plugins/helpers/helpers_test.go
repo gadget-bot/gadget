@@ -116,10 +116,12 @@ func TestAddReaction_NoErrorOnSuccess(t *testing.T) {
 
 // newConversationListServer returns a test server that serves paginated
 // conversations.list responses. Each call to pages consumes the next page.
+// It also asserts that every request includes the expected channel types.
 func newConversationListServer(t *testing.T, pages []string) slack.Client {
 	t.Helper()
 	call := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertConversationListTypes(t, r)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if call < len(pages) {
@@ -134,10 +136,26 @@ func newConversationListServer(t *testing.T, pages []string) slack.Client {
 	return *api
 }
 
+// assertConversationListTypes verifies that a conversations.list request
+// includes both public_channel and private_channel in the types parameter.
+func assertConversationListTypes(t *testing.T, r *http.Request) {
+	t.Helper()
+	if err := r.ParseForm(); err != nil {
+		t.Fatalf("failed to parse form: %v", err)
+	}
+	types := r.FormValue("types")
+	assert.Contains(t, types, "public_channel", "conversations.list must request public_channel")
+	assert.Contains(t, types, "private_channel", "conversations.list must request private_channel")
+}
+
 // newMultiHandlerServer returns a test server that routes requests by path.
+// Requests to /conversations.list are also checked for correct types parameter.
 func newMultiHandlerServer(t *testing.T, handlers map[string]http.HandlerFunc) slack.Client {
 	t.Helper()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/conversations.list" {
+			assertConversationListTypes(t, r)
+		}
 		if h, ok := handlers[r.URL.Path]; ok {
 			h(w, r)
 			return
@@ -270,4 +288,22 @@ func TestJoinChannelByName_JoinError(t *testing.T) {
 	})
 	err := JoinChannelByName(api, "spam-feed")
 	assert.ErrorContains(t, err, "joining channel spam-feed")
+}
+
+func TestFindChannelByName_FindsPrivateChannel(t *testing.T) {
+	page := `{"ok":true,"channels":[{"id":"C_PRIV","name":"secret-ops","name_normalized":"secret-ops","is_private":true}],"response_metadata":{"next_cursor":""}}`
+	api := newConversationListServer(t, []string{page})
+	ch, err := FindChannelByName(api, "secret-ops")
+	require.NoError(t, err)
+	assert.Equal(t, "C_PRIV", ch.ID)
+}
+
+func TestGetJoinedChannels_IncludesPrivateChannels(t *testing.T) {
+	page := `{"ok":true,"channels":[{"id":"C_PUB","name":"general","name_normalized":"general","is_member":true,"is_private":false},{"id":"C_PRIV","name":"secret-ops","name_normalized":"secret-ops","is_member":true,"is_private":true}],"response_metadata":{"next_cursor":""}}`
+	api := newConversationListServer(t, []string{page})
+	channels, err := GetJoinedChannels(api)
+	require.NoError(t, err)
+	require.Len(t, channels, 2)
+	assert.Equal(t, "C_PUB", channels[0].ID)
+	assert.Equal(t, "C_PRIV", channels[1].ID)
 }
