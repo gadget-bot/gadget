@@ -16,12 +16,13 @@ func TestSlashCommandRoute_Execute(t *testing.T) {
 			Description: "A test slash command",
 		},
 		Command: "/test",
-		Plugin: func(router Router, route Route, api slack.Client, cmd slack.SlashCommand) {
+		Plugin: func(ctx HandlerContext, cmd slack.SlashCommand) {
 			pluginCalled = true
 		},
 	}
 
-	route.Execute(Router{}, slack.Client{}, slack.SlashCommand{})
+	ctx := HandlerContext{BotClient: &slack.Client{}}
+	route.Execute(ctx, slack.SlashCommand{})
 	assert.True(t, pluginCalled, "expected Plugin function to be called")
 }
 
@@ -33,7 +34,7 @@ func TestSlashCommandRoute_ImmediateResponse(t *testing.T) {
 		},
 		Command:           "/deploy",
 		ImmediateResponse: "Deploying...",
-		Plugin: func(router Router, route Route, api slack.Client, cmd slack.SlashCommand) {
+		Plugin: func(ctx HandlerContext, cmd slack.SlashCommand) {
 		},
 	}
 

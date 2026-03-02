@@ -12,10 +12,11 @@ type SlashCommandRoute struct {
 	Route
 	Command           string // Slack command name, e.g. "/deploy"
 	ImmediateResponse string // Optional ephemeral response sent before async plugin execution
-	Plugin            func(router Router, route Route, api slack.Client, cmd slack.SlashCommand)
+	Plugin            func(ctx HandlerContext, cmd slack.SlashCommand)
 }
 
 // Execute calls Plugin()
-func (route SlashCommandRoute) Execute(router Router, api slack.Client, cmd slack.SlashCommand) {
-	route.Plugin(router, route.Route, api, cmd)
+func (route SlashCommandRoute) Execute(ctx HandlerContext, cmd slack.SlashCommand) {
+	ctx.Route = route.Route
+	route.Plugin(ctx, cmd)
 }

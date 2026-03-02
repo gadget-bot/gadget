@@ -80,7 +80,12 @@ func TestMentionPlugin_AddsReactionAndPostsMessage(t *testing.T) {
 		TimeStamp: "1234567890.123456",
 	}
 
-	route.Plugin(router.Router{}, route.Route, *api, ev, "restricted command")
+	ctx := router.HandlerContext{
+		Router:    router.Router{},
+		Route:     route.Route,
+		BotClient: api,
+	}
+	route.Plugin(ctx, ev, "restricted command")
 
 	assert.Equal(t, "astonished", addedReaction)
 	assert.Contains(t, postedMessage, "U_USER")
@@ -120,7 +125,12 @@ func TestChannelMessagePlugin_AddsReactionAndPostsMessage(t *testing.T) {
 		TimeStamp: "1234567890.123456",
 	}
 
-	route.Plugin(router.Router{}, route.Route, *api, ev, "restricted command")
+	ctx := router.HandlerContext{
+		Router:    router.Router{},
+		Route:     route.Route,
+		BotClient: api,
+	}
+	route.Plugin(ctx, ev, "restricted command")
 
 	assert.Equal(t, "astonished", addedReaction)
 	assert.Contains(t, postedMessage, "U_USER")

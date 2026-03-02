@@ -124,7 +124,7 @@ func TestGadgetHandler_CallbackEventCallsPlugin(t *testing.T) {
 			Name:    "test-route",
 			Pattern: `(?i)^hello`,
 		},
-		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+		Plugin: func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
 			close(pluginCalled)
 		},
 	})
@@ -177,7 +177,7 @@ func TestGadgetHandler_ChannelMessageCallsPlugin(t *testing.T) {
 			Name:    "test-channel",
 			Pattern: `(?i)^deploy`,
 		},
-		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
+		Plugin: func(ctx router.HandlerContext, ev slackevents.MessageEvent, message string) {
 			close(pluginCalled)
 		},
 	})
@@ -232,7 +232,7 @@ func TestGadgetHandler_ChannelMessagePermissionDenied(t *testing.T) {
 			Pattern:     `(?i)^deploy`,
 			Permissions: []string{"deployers"},
 		},
-		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
+		Plugin: func(ctx router.HandlerContext, ev slackevents.MessageEvent, message string) {
 			close(restrictedCalled)
 		},
 	})
@@ -243,7 +243,7 @@ func TestGadgetHandler_ChannelMessagePermissionDenied(t *testing.T) {
 			Name:        "permission_denied",
 			Permissions: []string{"*"},
 		},
-		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.MessageEvent, message string) {
+		Plugin: func(ctx router.HandlerContext, ev slackevents.MessageEvent, message string) {
 			close(deniedCalled)
 		},
 	}
@@ -305,7 +305,7 @@ func TestGadgetHandler_MentionPermissionDenied(t *testing.T) {
 			Pattern:     `(?i)^hello`,
 			Permissions: []string{"greeters"},
 		},
-		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+		Plugin: func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
 			close(restrictedCalled)
 		},
 	})
@@ -316,7 +316,7 @@ func TestGadgetHandler_MentionPermissionDenied(t *testing.T) {
 			Name:        "permission_denied",
 			Permissions: []string{"*"},
 		},
-		Plugin: func(r router.Router, route router.Route, api slack.Client, ev slackevents.AppMentionEvent, message string) {
+		Plugin: func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
 			close(deniedCalled)
 		},
 	}
@@ -418,7 +418,7 @@ func TestCommandHandler_ValidCommandCallsPlugin(t *testing.T) {
 			Description: "Deploy the app",
 		},
 		Command: "/deploy",
-		Plugin: func(r router.Router, route router.Route, api slack.Client, cmd slack.SlashCommand) {
+		Plugin: func(ctx router.HandlerContext, cmd slack.SlashCommand) {
 			close(pluginCalled)
 		},
 	})

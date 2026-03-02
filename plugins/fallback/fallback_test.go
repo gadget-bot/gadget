@@ -49,7 +49,12 @@ func TestFallbackPlugin_PostsMessage(t *testing.T) {
 		Text:    "something unrecognized",
 	}
 
-	route.Plugin(router.Router{}, route.Route, *api, ev, "something unrecognized")
+	ctx := router.HandlerContext{
+		Router:    router.Router{},
+		Route:     route.Route,
+		BotClient: api,
+	}
+	route.Plugin(ctx, ev, "something unrecognized")
 
 	assert.Contains(t, postedMessage, "U_USER")
 	assert.Contains(t, postedMessage, "not sure what to do")

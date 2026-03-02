@@ -117,13 +117,17 @@ func TestGetMyGroups_PostsGroupList(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := getMyGroups()
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:    "U_USER",
 		Channel: "C123",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "my groups")
+	route.Plugin(ctx, ev, "my groups")
 
 	// Should post two messages: header + group list
 	assert.GreaterOrEqual(t, len(messages), 2)
@@ -152,13 +156,17 @@ func TestGetMyGroups_NoGroups(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := getMyGroups()
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:    "U_LONELY",
 		Channel: "C123",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "my groups")
+	route.Plugin(ctx, ev, "my groups")
 
 	assert.GreaterOrEqual(t, len(messages), 2)
 	assert.Contains(t, messages[1], "don't seem to be a member")
@@ -191,14 +199,18 @@ func TestAddUserToGroup_AddsSuccessfully(t *testing.T) {
 
 	route := addUserToGroup()
 	compileMentionRouteForTest(t, route)
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
 		Channel:   "C123",
 		TimeStamp: "1234567890.123456",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "add <@u123> to deployers")
+	route.Plugin(ctx, ev, "add <@u123> to deployers")
 
 	assert.Equal(t, "tada", addedReaction)
 	assert.Contains(t, postedMessage, "successfully added")
@@ -239,14 +251,18 @@ func TestRemoveUserFromGroup_RemovesSuccessfully(t *testing.T) {
 
 	route := removeUserFromGroup()
 	compileMentionRouteForTest(t, route)
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
 		Channel:   "C123",
 		TimeStamp: "1234567890.123456",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "remove <@u123> from deployers")
+	route.Plugin(ctx, ev, "remove <@u123> from deployers")
 
 	assert.Contains(t, postedMessage, "no longer a member")
 
@@ -275,14 +291,18 @@ func TestRemoveUserFromGroup_NonexistentGroup(t *testing.T) {
 
 	route := removeUserFromGroup()
 	compileMentionRouteForTest(t, route)
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
 		Channel:   "C123",
 		TimeStamp: "1234567890.123456",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "remove <@u123> from nonexistent")
+	route.Plugin(ctx, ev, "remove <@u123> from nonexistent")
 
 	assert.Contains(t, postedMessage, "couldn't find a group")
 }
@@ -311,13 +331,17 @@ func TestGetAllGroups_PostsAllGroups(t *testing.T) {
 	api := slack.New("xoxb-fake", slack.OptionAPIURL(server.URL+"/"))
 
 	route := getAllGroups()
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:    "U_ADMIN",
 		Channel: "C123",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "list all groups")
+	route.Plugin(ctx, ev, "list all groups")
 
 	assert.GreaterOrEqual(t, len(messages), 2)
 	assert.Contains(t, messages[1], "admins")
@@ -352,14 +376,18 @@ func TestAddUserToGroup_UserAlreadyInGroup(t *testing.T) {
 
 	route := addUserToGroup()
 	compileMentionRouteForTest(t, route)
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
 		Channel:   "C123",
 		TimeStamp: "1234567890.123456",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "add <@u123> to deployers")
+	route.Plugin(ctx, ev, "add <@u123> to deployers")
 
 	// Should still report success (idempotent)
 	assert.Contains(t, postedMessage, "successfully added")
@@ -394,14 +422,18 @@ func TestRemoveUserFromGroup_UserNotAMember(t *testing.T) {
 
 	route := removeUserFromGroup()
 	compileMentionRouteForTest(t, route)
-	r := router.Router{DbConnection: db}
+	ctx := router.HandlerContext{
+		Router:    router.Router{DbConnection: db},
+		Route:     route.Route,
+		BotClient: api,
+	}
 	ev := slackevents.AppMentionEvent{
 		User:      "U_ADMIN",
 		Channel:   "C123",
 		TimeStamp: "1234567890.123456",
 	}
 
-	route.Plugin(r, route.Route, *api, ev, "remove <@u123> from deployers")
+	route.Plugin(ctx, ev, "remove <@u123> from deployers")
 
 	assert.Contains(t, postedMessage, "doesn't look like")
 }
