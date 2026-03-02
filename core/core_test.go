@@ -7,7 +7,11 @@ import (
 )
 
 func TestSetupWithConfig_PopulatesClientField(t *testing.T) {
-	gadget, _ := SetupWithConfig("xoxb-fake-token", "fake-secret", "", "", "", "", "3000", []string{})
+	gadget, _ := SetupWithConfig(Config{ //nolint:gosec // test credentials
+		SlackOAuthToken: "xoxb-fake-token",
+		SigningSecret:   "fake-secret",
+		ListenPort:      "3000",
+	})
 
 	assert.NotNil(t, gadget.Client, "Expected gadget.Client to be populated after SetupWithConfig")
 }
