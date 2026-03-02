@@ -30,26 +30,37 @@ import (
 	"github.com/slack-go/slack/slackevents"
 )
 
-var (
-	// Slack Bot User OAuth Access Token which starts with "xoxb-"
-	slackOauthToken = os.Getenv("SLACK_OAUTH_TOKEN")
+// Config holds all configuration needed to initialize a Gadget instance.
+type Config struct {
+	SlackOAuthToken string
+	SigningSecret   string
+	DBUser          string
+	DBPass          string
+	DBHost          string
+	DBName          string
+	ListenPort      string
+	GlobalAdmins    []string
+}
 
-	// Slack signing secret
-	signingSecret = os.Getenv("SLACK_SIGNING_SECRET")
-
-	dbUser     = os.Getenv("GADGET_DB_USER")
-	dbPass     = os.Getenv("GADGET_DB_PASS")
-	dbHost     = os.Getenv("GADGET_DB_HOST")
-	dbName     = os.Getenv("GADGET_DB_NAME")
-	listenPort = os.Getenv("GADGET_LISTEN_PORT")
-	admins     = globalAdminsFromString(os.Getenv("GADGET_GLOBAL_ADMINS"))
-
-	api *slack.Client
-)
+// ConfigFromEnv returns a Config populated from environment variables.
+func ConfigFromEnv() Config {
+	return Config{
+		SlackOAuthToken: os.Getenv("SLACK_OAUTH_TOKEN"),
+		SigningSecret:   os.Getenv("SLACK_SIGNING_SECRET"),
+		DBUser:          os.Getenv("GADGET_DB_USER"),
+		DBPass:          os.Getenv("GADGET_DB_PASS"),
+		DBHost:          os.Getenv("GADGET_DB_HOST"),
+		DBName:          os.Getenv("GADGET_DB_NAME"),
+		ListenPort:      os.Getenv("GADGET_LISTEN_PORT"),
+		GlobalAdmins:    globalAdminsFromString(os.Getenv("GADGET_GLOBAL_ADMINS")),
+	}
+}
 
 type Gadget struct {
-	Router router.Router
-	Client *slack.Client
+	Router        router.Router
+	Client        *slack.Client
+	signingSecret string
+	listenPort    string
 }
 
 func requestLog(code int, r http.Request, denied bool, start time.Time, logger zerolog.Logger) {
@@ -76,7 +87,7 @@ func generateRequestID() string {
 // verifySlackRequest reads the request body, verifies the Slack signing secret,
 // and returns the body bytes. On failure it writes the appropriate HTTP status
 // and returns a non-nil error.
-func verifySlackRequest(w http.ResponseWriter, r *http.Request, logger zerolog.Logger) ([]byte, int, error) {
+func verifySlackRequest(w http.ResponseWriter, r *http.Request, secret string, logger zerolog.Logger) ([]byte, int, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to read request body")
@@ -84,7 +95,7 @@ func verifySlackRequest(w http.ResponseWriter, r *http.Request, logger zerolog.L
 		return nil, http.StatusBadRequest, err
 	}
 
-	sv, err := slack.NewSecretsVerifier(r.Header, signingSecret)
+	sv, err := slack.NewSecretsVerifier(r.Header, secret)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to create secrets verifier")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -104,9 +115,9 @@ func verifySlackRequest(w http.ResponseWriter, r *http.Request, logger zerolog.L
 	return body, http.StatusOK, nil
 }
 
-func getListenPort() string {
-	if listenPort != "" {
-		return listenPort
+func (g Gadget) getListenPort() string {
+	if g.listenPort != "" {
+		return g.listenPort
 	}
 	return "3000"
 }
@@ -145,7 +156,13 @@ func safeGo(routeName string, logger zerolog.Logger, fn func()) {
 	}()
 }
 
+// Setup creates a new Gadget instance using configuration from environment variables.
 func Setup() (*Gadget, error) {
+	return SetupWithConfig(ConfigFromEnv())
+}
+
+// SetupWithConfig creates a new Gadget instance using the provided Config.
+func SetupWithConfig(cfg Config) (*Gadget, error) {
 	var gadget Gadget
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -161,10 +178,11 @@ func Setup() (*Gadget, error) {
 	zerolog.SetGlobalLevel(level)
 	log.Info().Str("level", level.String()).Msg("Log level configured")
 
-	api = slack.New(slackOauthToken)
-	gadget.Client = api
+	gadget.Client = slack.New(cfg.SlackOAuthToken)
+	gadget.signingSecret = cfg.SigningSecret
+	gadget.listenPort = cfg.ListenPort
 
-	log.Debug().Str("globalAdmins", strings.Join(admins, ", ")).Msg("Pulled globalAdmins")
+	log.Debug().Str("globalAdmins", strings.Join(cfg.GlobalAdmins, ", ")).Msg("Pulled globalAdmins")
 
 	gadget.Router = *router.NewRouter()
 
@@ -185,7 +203,7 @@ func Setup() (*Gadget, error) {
 	default:
 		gormLogLevel = gormlogger.Silent
 	}
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", dbUser, dbPass, dbHost, dbName)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBName)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormLogLevel),
 	})
@@ -215,7 +233,7 @@ func Setup() (*Gadget, error) {
 	var globalAdmins models.Group
 	var globalAdminUsers []models.User
 
-	for _, userName := range admins {
+	for _, userName := range cfg.GlobalAdmins {
 		var user models.User
 		db.FirstOrCreate(&user, models.User{Uuid: userName})
 		globalAdminUsers = append(globalAdminUsers, user)
@@ -229,20 +247,6 @@ func Setup() (*Gadget, error) {
 	return &gadget, nil
 }
 
-func SetupWithConfig(token, secret, databaseUser, databasePass, databaseHost, databaseName, port string, globalAdmins []string) (*Gadget, error) {
-	// quick and dirty, just override the global values which were set from ENV vars
-	slackOauthToken = token
-	admins = globalAdmins
-	signingSecret = secret
-	dbUser = databaseUser
-	dbPass = databasePass
-	dbHost = databaseHost
-	dbName = databaseName
-	listenPort = port
-
-	return Setup()
-}
-
 // Handler returns an http.Handler with all Gadget routes registered.
 func (gadget Gadget) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -254,7 +258,7 @@ func (gadget Gadget) Handler() http.Handler {
 		accessDenied := false
 		defer func() { requestLog(statusCode, *r, accessDenied, start, logger) }()
 
-		body, code, err := verifySlackRequest(w, r, logger)
+		body, code, err := verifySlackRequest(w, r, gadget.signingSecret, logger)
 		if err != nil {
 			statusCode = code
 			return
@@ -349,7 +353,7 @@ func (gadget Gadget) Handler() http.Handler {
 		accessDenied := false
 		defer func() { requestLog(statusCode, *r, accessDenied, start, logger) }()
 
-		body, code, err := verifySlackRequest(w, r, logger)
+		body, code, err := verifySlackRequest(w, r, gadget.signingSecret, logger)
 		if err != nil {
 			statusCode = code
 			return
@@ -418,13 +422,14 @@ func (gadget Gadget) Handler() http.Handler {
 
 func (gadget Gadget) Run() error {
 	handler := gadget.Handler()
+	port := gadget.getListenPort()
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%s", getListenPort()),
+		Addr:         fmt.Sprintf(":%s", port),
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	log.Info().Str("port", getListenPort()).Msg("Server listening")
+	log.Info().Str("port", port).Msg("Server listening")
 	return srv.ListenAndServe()
 }

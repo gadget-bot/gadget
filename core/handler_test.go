@@ -71,10 +71,10 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 func newTestGadget(t *testing.T) Gadget {
 	t.Helper()
-	signingSecret = testSecret
 	g := Gadget{
-		Router: *router.NewRouter(),
-		Client: slack.New("xoxb-fake"),
+		Router:        *router.NewRouter(),
+		Client:        slack.New("xoxb-fake"),
+		signingSecret: testSecret,
 	}
 	g.Router.DbConnection = setupTestDB(t)
 	return g
