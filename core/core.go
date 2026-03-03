@@ -455,11 +455,10 @@ func (gadget Gadget) Handler() http.Handler {
 
 		logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
 		if route.ImmediateResponse != nil {
-			immediateText := route.ImmediateResponse()
-			if immediateText != "" {
+			if text := route.ImmediateResponse(); text != "" {
 				resp, err := json.Marshal(map[string]string{
 					"response_type": "ephemeral",
-					"text":          immediateText,
+					"text":          text,
 				})
 				if err != nil {
 					logger.Error().Err(err).Msg("Failed to marshal immediate response")
@@ -479,9 +478,6 @@ func (gadget Gadget) Handler() http.Handler {
 				cmdRoute.Execute(c, cmd)
 			})(ctx)
 		})
-		if route.ImmediateResponse == nil {
-			w.WriteHeader(http.StatusOK)
-		}
 	})
 
 	return mux
