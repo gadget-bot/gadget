@@ -82,6 +82,23 @@ func TestGenerate_ExtraScopes(t *testing.T) {
 	assert.Contains(t, m.OAuthConfig.Scopes.Bot, "reactions:write")
 }
 
+func TestGenerate_ExtraScopesDedup(t *testing.T) {
+	r := *router.NewRouter()
+	r.AddMentionRoute(router.MentionRoute{
+		Route: router.Route{Name: "test", Pattern: `test`},
+	})
+
+	m := Generate(r, "Bot", "", "", "chat:write")
+
+	count := 0
+	for _, s := range m.OAuthConfig.Scopes.Bot {
+		if s == "chat:write" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "chat:write should appear exactly once")
+}
+
 func TestGenerate_EmptyRouter(t *testing.T) {
 	r := *router.NewRouter()
 

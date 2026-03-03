@@ -207,6 +207,8 @@ func (g Gadget) buildChain(fn func(router.HandlerContext)) func(router.HandlerCo
 // requestURL is the base URL where the bot is hosted (e.g. "https://example.com").
 // Additional OAuth scopes can be provided via extraScopes for scopes that cannot
 // be inferred from route registrations.
+// Note: called on a value receiver, so g.Router is copied at call time; routes
+// registered after this call are not reflected in the returned manifest.
 func (g Gadget) Manifest(name, description, requestURL string, extraScopes ...string) manifest.Manifest {
 	return manifest.Generate(g.Router, name, description, requestURL, extraScopes...)
 }

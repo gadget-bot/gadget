@@ -3,16 +3,10 @@ package manifest
 
 import (
 	"encoding/json"
+	"sort"
 
 	"github.com/gadget-bot/gadget/router"
 )
-
-// SlashCommand represents a slash command entry in the manifest.
-type SlashCommand struct {
-	Command     string `json:"command"`
-	Description string `json:"description"`
-	URL         string `json:"url,omitempty"`
-}
 
 // EventSubscriptions represents the event subscriptions section of the manifest.
 type EventSubscriptions struct {
@@ -114,6 +108,10 @@ func Generate(r router.Router, name, description, requestURL string, extraScopes
 		scopes["commands"] = true
 	}
 
+	sort.Slice(slashCommands, func(i, j int) bool {
+		return slashCommands[i].Command < slashCommands[j].Command
+	})
+
 	scopeList := make([]string, 0, len(scopes))
 	for s := range scopes {
 		scopeList = append(scopeList, s)
@@ -123,6 +121,7 @@ func Generate(r router.Router, name, description, requestURL string, extraScopes
 			scopeList = append(scopeList, s)
 		}
 	}
+	sort.Strings(scopeList)
 
 	eventURL := ""
 	if requestURL != "" {
