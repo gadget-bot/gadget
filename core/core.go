@@ -454,20 +454,22 @@ func (gadget Gadget) Handler() http.Handler {
 		}
 
 		logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
-		if route.ImmediateResponse != "" {
-			resp, err := json.Marshal(map[string]string{
-				"response_type": "ephemeral",
-				"text":          route.ImmediateResponse,
-			})
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to marshal immediate response")
-				statusCode = http.StatusInternalServerError
-				w.WriteHeader(statusCode)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			if _, err := w.Write(resp); err != nil {
-				logger.Error().Err(err).Msg("Failed to write immediate response")
+		if route.ImmediateResponse != nil {
+			if text := route.ImmediateResponse(); text != "" {
+				resp, err := json.Marshal(map[string]string{
+					"response_type": "ephemeral",
+					"text":          text,
+				})
+				if err != nil {
+					logger.Error().Err(err).Msg("Failed to marshal immediate response")
+					statusCode = http.StatusInternalServerError
+					w.WriteHeader(statusCode)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if _, err := w.Write(resp); err != nil {
+					logger.Error().Err(err).Msg("Failed to write immediate response")
+				}
 			}
 		}
 		cmdRoute := route // capture for closure
@@ -476,9 +478,6 @@ func (gadget Gadget) Handler() http.Handler {
 				cmdRoute.Execute(c, cmd)
 			})(ctx)
 		})
-		if route.ImmediateResponse == "" {
-			w.WriteHeader(http.StatusOK)
-		}
 	})
 
 	return mux

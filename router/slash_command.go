@@ -10,8 +10,8 @@ import "github.com/slack-go/slack"
 // or the slash command's ResponseURL).
 type SlashCommandRoute struct {
 	Route
-	Command           string // Slack command name, e.g. "/deploy"
-	ImmediateResponse string // Optional ephemeral response sent before async plugin execution
+	Command           string        // Slack command name, e.g. "/deploy"
+	ImmediateResponse func() string // Optional ephemeral response evaluated per-request; nil means no response
 	Plugin            func(ctx HandlerContext, cmd slack.SlashCommand)
 }
 
