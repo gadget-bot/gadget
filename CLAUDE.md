@@ -76,6 +76,7 @@ Environment variables: `SLACK_OAUTH_TOKEN`, `SLACK_SIGNING_SECRET`, `GADGET_GLOB
 - Route plugin execution is always async (goroutines)
 - GORM `FirstOrCreate` pattern for safe upserts
 - Feature branch + PR merge workflow
+- NEVER force push to main
 
 ## GitHub Repository
 

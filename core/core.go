@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gadget-bot/gadget/manifest"
 	"github.com/gadget-bot/gadget/models"
 	"github.com/gadget-bot/gadget/plugins/fallback"
 	"github.com/gadget-bot/gadget/plugins/groups"
@@ -32,30 +33,49 @@ import (
 
 // Config holds all configuration needed to initialize a Gadget instance.
 type Config struct {
-	SlackOAuthToken string
-	SlackUserToken  string // optional user-level OAuth token (xoxp-)
-	SigningSecret   string
-	DBUser          string
-	DBPass          string
-	DBHost          string
-	DBName          string
-	ListenPort      string
-	GlobalAdmins    []string
+	SlackOAuthToken   string
+	SlackUserToken    string // optional user-level OAuth token (xoxp-)
+	SigningSecret     string
+	DBUser            string
+	DBPass            string
+	DBHost            string
+	DBName            string
+	ListenPort        string
+	GlobalAdmins      []string
+	DBConnMaxLifetime time.Duration // max lifetime of a DB connection; 0 uses default (5m)
+	DBConnMaxIdleTime time.Duration // max idle time of a DB connection; 0 uses default (3m)
 }
 
 // ConfigFromEnv returns a Config populated from environment variables.
 func ConfigFromEnv() Config {
 	return Config{
-		SlackOAuthToken: os.Getenv("SLACK_OAUTH_TOKEN"),
-		SlackUserToken:  os.Getenv("SLACK_USER_OAUTH_TOKEN"),
-		SigningSecret:   os.Getenv("SLACK_SIGNING_SECRET"),
-		DBUser:          os.Getenv("GADGET_DB_USER"),
-		DBPass:          os.Getenv("GADGET_DB_PASS"),
-		DBHost:          os.Getenv("GADGET_DB_HOST"),
-		DBName:          os.Getenv("GADGET_DB_NAME"),
-		ListenPort:      os.Getenv("GADGET_LISTEN_PORT"),
-		GlobalAdmins:    globalAdminsFromString(os.Getenv("GADGET_GLOBAL_ADMINS")),
+		SlackOAuthToken:   os.Getenv("SLACK_OAUTH_TOKEN"),
+		SlackUserToken:    os.Getenv("SLACK_USER_OAUTH_TOKEN"),
+		SigningSecret:     os.Getenv("SLACK_SIGNING_SECRET"),
+		DBUser:            os.Getenv("GADGET_DB_USER"),
+		DBPass:            os.Getenv("GADGET_DB_PASS"),
+		DBHost:            os.Getenv("GADGET_DB_HOST"),
+		DBName:            os.Getenv("GADGET_DB_NAME"),
+		ListenPort:        os.Getenv("GADGET_LISTEN_PORT"),
+		GlobalAdmins:      globalAdminsFromString(os.Getenv("GADGET_GLOBAL_ADMINS")),
+		DBConnMaxLifetime: parseDurationEnv("GADGET_DB_CONN_MAX_LIFETIME"),
+		DBConnMaxIdleTime: parseDurationEnv("GADGET_DB_CONN_MAX_IDLE_TIME"),
 	}
+}
+
+// parseDurationEnv reads an environment variable as a time.Duration.
+// Returns 0 (meaning "use default") if the variable is empty or unparseable.
+func parseDurationEnv(key string) time.Duration {
+	val := os.Getenv(key)
+	if val == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		log.Warn().Str("key", key).Str("value", val).Msg("Invalid duration, using default")
+		return 0
+	}
+	return d
 }
 
 // Middleware wraps handler execution. Call next(ctx) to continue the chain,
@@ -183,6 +203,16 @@ func (g Gadget) buildChain(fn func(router.HandlerContext)) func(router.HandlerCo
 	return handler
 }
 
+// Manifest generates a Slack app manifest from the currently registered routes.
+// requestURL is the base URL where the bot is hosted (e.g. "https://example.com").
+// Additional OAuth scopes can be provided via extraScopes for scopes that cannot
+// be inferred from route registrations.
+// Note: called on a value receiver, so g.Router is copied at call time; routes
+// registered after this call are not reflected in the returned manifest.
+func (g Gadget) Manifest(name, description, requestURL string, extraScopes ...string) manifest.Manifest {
+	return manifest.Generate(g.Router, name, description, requestURL, extraScopes...)
+}
+
 // Setup creates a new Gadget instance using configuration from environment variables.
 func Setup() (*Gadget, error) {
 	return SetupWithConfig(ConfigFromEnv())
@@ -247,8 +277,16 @@ func SetupWithConfig(cfg Config) (*Gadget, error) {
 	}
 	sqlDB.SetMaxOpenConns(10)
 	sqlDB.SetMaxIdleConns(5)
-	sqlDB.SetConnMaxLifetime(5 * time.Minute)
-	sqlDB.SetConnMaxIdleTime(3 * time.Minute)
+	connMaxLifetime := cfg.DBConnMaxLifetime
+	if connMaxLifetime == 0 {
+		connMaxLifetime = 5 * time.Minute
+	}
+	connMaxIdleTime := cfg.DBConnMaxIdleTime
+	if connMaxIdleTime == 0 {
+		connMaxIdleTime = 3 * time.Minute
+	}
+	sqlDB.SetConnMaxLifetime(connMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(connMaxIdleTime)
 	log.Debug().Int("maxOpenConns", 10).Int("maxIdleConns", 5).Msg("DB connection pool configured")
 
 	var version string
