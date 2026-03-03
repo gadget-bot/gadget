@@ -168,6 +168,61 @@ func TestGadgetHandler_CallbackEventCallsPlugin(t *testing.T) {
 	}
 }
 
+func TestGadgetHandler_CallbackEventPassesUserClientInContext(t *testing.T) {
+	g := newTestGadget(t)
+	g.UserClient = slack.New("xoxp-fake") //nolint:gosec // test credentials
+
+	ctxUserClient := make(chan *slack.Client, 1)
+	g.Router.AddMentionRoute(router.MentionRoute{
+		Route: router.Route{
+			Name:    "test-user-client-route",
+			Pattern: `(?i)^hello`,
+		},
+		Plugin: func(ctx router.HandlerContext, ev slackevents.AppMentionEvent, message string) {
+			ctxUserClient <- ctx.UserClient
+		},
+	})
+	g.Router.BotUID = "U_BOT"
+
+	handler := g.Handler()
+
+	eventPayload := map[string]interface{}{
+		"type":       "event_callback",
+		"token":      "fake",
+		"team_id":    "T123",
+		"api_app_id": "A123",
+		"authorizations": []map[string]string{
+			{"user_id": "U_BOT", "team_id": "T123"},
+		},
+		"event": map[string]interface{}{
+			"type":    "app_mention",
+			"user":    "U_USER",
+			"text":    "<@U_BOT> hello world",
+			"channel": "C123",
+			"ts":      "1234567890.123456",
+		},
+		"event_id":   "Ev127",
+		"event_time": 1234567890,
+	}
+	body, _ := json.Marshal(eventPayload)
+	bodyStr := string(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/gadget", strings.NewReader(bodyStr))
+	signRequest(req, bodyStr)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	select {
+	case client := <-ctxUserClient:
+		assert.Same(t, g.UserClient, client)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for plugin context to include user client")
+	}
+}
+
 func TestGadgetHandler_ChannelMessageCallsPlugin(t *testing.T) {
 	g := newTestGadget(t)
 
