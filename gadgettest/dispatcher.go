@@ -88,7 +88,8 @@ func (d *Dispatcher) ctx() router.HandlerContext {
 }
 
 // DispatchMention finds the matching mention route for message and executes it
-// synchronously. Returns an error if no route matches.
+// synchronously. Route permissions are not enforced; this dispatches directly
+// to the handler. Returns an error if no route matches.
 func (d *Dispatcher) DispatchMention(ev slackevents.AppMentionEvent, message string) error {
 	route, found := d.router.FindMentionRouteByMessage(message)
 	if !found {
