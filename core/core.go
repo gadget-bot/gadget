@@ -315,209 +315,217 @@ func SetupWithConfig(cfg Config) (*Gadget, error) {
 	return &gadget, nil
 }
 
-// Handler returns an http.Handler with all Gadget routes registered.
-func (gadget Gadget) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/gadget", func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		requestID := generateRequestID()
-		logger := log.With().Str("request_id", requestID).Logger()
-		statusCode := http.StatusOK
-		accessDenied := false
-		defer func() { requestLog(statusCode, *r, accessDenied, start, logger) }()
+type requestState struct {
+	start        time.Time
+	logger       zerolog.Logger
+	statusCode   int
+	accessDenied bool
+}
 
-		body, code, err := verifySlackRequest(w, r, gadget.signingSecret, logger)
-		if err != nil {
-			statusCode = code
-			return
-		}
+func newRequestState() requestState {
+	return requestState{
+		start:      time.Now(),
+		logger:     log.With().Str("request_id", generateRequestID()).Logger(),
+		statusCode: http.StatusOK,
+	}
+}
 
-		eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionNoVerifyToken())
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to parse Slack event")
-			statusCode = http.StatusInternalServerError
-			w.WriteHeader(statusCode)
-			return
-		}
+func (gadget Gadget) buildHandlerContext(logger zerolog.Logger) router.HandlerContext {
+	return router.HandlerContext{
+		Router:     gadget.Router,
+		BotClient:  gadget.Client,
+		UserClient: gadget.UserClient,
+		Logger:     logger,
+	}
+}
 
-		if eventsAPIEvent.Type == slackevents.URLVerification {
-			var res *slackevents.ChallengeResponse
-
-			err := json.Unmarshal([]byte(body), &res)
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to unmarshal URL verification challenge")
-				statusCode = http.StatusInternalServerError
-				w.WriteHeader(statusCode)
-				return
-			}
-			w.Header().Set("Content-Type", "text")
-			if _, err := w.Write([]byte(res.Challenge)); err != nil {
-				logger.Error().Err(err).Msg("Failed to write URL verification challenge response")
-			}
-		}
-
-		if eventsAPIEvent.Type == slackevents.CallbackEvent {
-			innerEvent := eventsAPIEvent.InnerEvent
-			err := gadget.Router.UpdateBotUID(body)
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to update bot UID")
-				statusCode = http.StatusInternalServerError
-				w.WriteHeader(statusCode)
-				return
-			}
-
-			eventUser := userFromInnerEvent(&innerEvent)
-			// Ignore all events that Gadget produces to avoid infinite loops
-			if gadget.Router.BotUID == eventUser {
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-
-			var currentUser models.User
-			gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: eventUser})
-
-			ctx := router.HandlerContext{
-				Router:     gadget.Router,
-				BotClient:  gadget.Client,
-				UserClient: gadget.UserClient,
-				Logger:     logger,
-			}
-
-			switch ev := innerEvent.Data.(type) {
-			case *slackevents.AppMentionEvent:
-				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
-				route, exists := gadget.Router.FindMentionRouteByMessage(trimmedMessage)
-				if !exists {
-					route = gadget.Router.DefaultMentionRoute
-				}
-
-				if !gadget.Router.Can(currentUser, route.Permissions) {
-					logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
-					accessDenied = true
-					route = gadget.Router.DeniedMentionRoute
-				}
-
-				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
-
-				r := route // capture for closure
-				e := *ev
-				safeGo(r.Name, logger, func() {
-					gadget.buildChain(func(c router.HandlerContext) {
-						r.Execute(c, e, trimmedMessage)
-					})(ctx)
-				})
-			case *slackevents.MessageEvent:
-				trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
-				route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
-				if !exists {
-					statusCode = http.StatusOK
-					w.WriteHeader(statusCode)
-					return
-				}
-
-				if !gadget.Router.Can(currentUser, route.Permissions) {
-					logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
-					accessDenied = true
-					route = gadget.Router.DeniedChannelMessageRoute
-				}
-
-				logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
-				r := route // capture for closure
-				e := *ev
-				safeGo(r.Name, logger, func() {
-					gadget.buildChain(func(c router.HandlerContext) {
-						r.Execute(c, e, trimmedMessage)
-					})(ctx)
-				})
-			}
-		}
+// logger is passed separately from ctx because safeGo uses it independently for panic-recovery logging.
+func (gadget Gadget) dispatchRoute(name string, logger zerolog.Logger, ctx router.HandlerContext, fn func(router.HandlerContext)) {
+	safeGo(name, logger, func() {
+		gadget.buildChain(fn)(ctx)
 	})
-	mux.HandleFunc("/gadget/command", func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		requestID := generateRequestID()
-		logger := log.With().Str("request_id", requestID).Logger()
-		statusCode := http.StatusOK
-		accessDenied := false
-		defer func() { requestLog(statusCode, *r, accessDenied, start, logger) }()
+}
 
-		body, code, err := verifySlackRequest(w, r, gadget.signingSecret, logger)
+func (gadget Gadget) handleEvent(w http.ResponseWriter, r *http.Request) {
+	rs := newRequestState()
+	defer func() { requestLog(rs.statusCode, *r, rs.accessDenied, rs.start, rs.logger) }()
+
+	body, code, err := verifySlackRequest(w, r, gadget.signingSecret, rs.logger)
+	if err != nil {
+		rs.statusCode = code
+		return
+	}
+
+	eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionNoVerifyToken())
+	if err != nil {
+		rs.logger.Error().Err(err).Msg("Failed to parse Slack event")
+		rs.statusCode = http.StatusInternalServerError
+		w.WriteHeader(rs.statusCode)
+		return
+	}
+
+	if eventsAPIEvent.Type == slackevents.URLVerification {
+		var res *slackevents.ChallengeResponse
+
+		err := json.Unmarshal([]byte(body), &res)
 		if err != nil {
-			statusCode = code
+			rs.logger.Error().Err(err).Msg("Failed to unmarshal URL verification challenge")
+			rs.statusCode = http.StatusInternalServerError
+			w.WriteHeader(rs.statusCode)
+			return
+		}
+		w.Header().Set("Content-Type", "text")
+		if _, err := w.Write([]byte(res.Challenge)); err != nil {
+			rs.logger.Error().Err(err).Msg("Failed to write URL verification challenge response")
+		}
+	}
+
+	if eventsAPIEvent.Type == slackevents.CallbackEvent {
+		innerEvent := eventsAPIEvent.InnerEvent
+		err := gadget.Router.UpdateBotUID(body)
+		if err != nil {
+			rs.logger.Error().Err(err).Msg("Failed to update bot UID")
+			rs.statusCode = http.StatusInternalServerError
+			w.WriteHeader(rs.statusCode)
 			return
 		}
 
-		// Restore body so SlashCommandParse can read it via ParseForm
-		r.Body = io.NopCloser(bytes.NewBuffer(body))
-		cmd, err := slack.SlashCommandParse(r)
-		if err != nil {
-			logger.Warn().Err(err).Msg("Failed to parse slash command")
-			statusCode = http.StatusBadRequest
-			w.WriteHeader(statusCode)
-			return
-		}
-
-		route, exists := gadget.Router.FindSlashCommandRouteByCommand(cmd.Command)
-		if !exists {
-			w.Header().Set("Content-Type", "application/json")
-			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Unknown command."}`)); err != nil {
-				logger.Error().Err(err).Msg("Failed to write unknown command response")
-			}
+		eventUser := userFromInnerEvent(&innerEvent)
+		// Ignore all events that Gadget produces to avoid infinite loops
+		if gadget.Router.BotUID == eventUser {
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 
 		var currentUser models.User
-		gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: cmd.UserID})
+		gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: eventUser})
 
-		ctx := router.HandlerContext{
-			Router:     gadget.Router,
-			BotClient:  gadget.Client,
-			UserClient: gadget.UserClient,
-			Logger:     logger,
-		}
+		ctx := gadget.buildHandlerContext(rs.logger)
 
-		if !gadget.Router.Can(currentUser, route.Permissions) {
-			logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
-			accessDenied = true
-			w.Header().Set("Content-Type", "application/json")
-			if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Permission denied."}`)); err != nil {
-				logger.Error().Err(err).Msg("Failed to write permission denied response")
+		switch ev := innerEvent.Data.(type) {
+		case *slackevents.AppMentionEvent:
+			trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
+			route, exists := gadget.Router.FindMentionRouteByMessage(trimmedMessage)
+			if !exists {
+				route = gadget.Router.DefaultMentionRoute
 			}
-			denied := gadget.Router.DeniedSlashCommandRoute
-			safeGo(denied.Name, logger, func() {
-				gadget.buildChain(func(c router.HandlerContext) {
-					denied.Execute(c, cmd)
-				})(ctx)
+
+			if !gadget.Router.Can(currentUser, route.Permissions) {
+				rs.logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
+				rs.accessDenied = true
+				route = gadget.Router.DeniedMentionRoute
+			}
+
+			rs.logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
+
+			r := route // capture for closure
+			e := *ev
+			gadget.dispatchRoute(r.Name, rs.logger, ctx, func(c router.HandlerContext) {
+				r.Execute(c, e, trimmedMessage)
 			})
-			return
-		}
+		case *slackevents.MessageEvent:
+			trimmedMessage := stripBotMention(ev.Text, gadget.Router.BotUID)
+			route, exists := gadget.Router.FindChannelMessageRouteByMessage(trimmedMessage)
+			if !exists {
+				rs.statusCode = http.StatusOK
+				w.WriteHeader(rs.statusCode)
+				return
+			}
 
-		logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
-		if route.ImmediateResponse != nil {
-			if text := route.ImmediateResponse(); text != "" {
-				resp, err := json.Marshal(map[string]string{
-					"response_type": "ephemeral",
-					"text":          text,
-				})
-				if err != nil {
-					logger.Error().Err(err).Msg("Failed to marshal immediate response")
-					statusCode = http.StatusInternalServerError
-					w.WriteHeader(statusCode)
-					return
-				}
-				w.Header().Set("Content-Type", "application/json")
-				if _, err := w.Write(resp); err != nil {
-					logger.Error().Err(err).Msg("Failed to write immediate response")
-				}
+			if !gadget.Router.Can(currentUser, route.Permissions) {
+				rs.logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
+				rs.accessDenied = true
+				route = gadget.Router.DeniedChannelMessageRoute
+			}
+
+			rs.logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Msg(trimmedMessage)
+			r := route // capture for closure
+			e := *ev
+			gadget.dispatchRoute(r.Name, rs.logger, ctx, func(c router.HandlerContext) {
+				r.Execute(c, e, trimmedMessage)
+			})
+		}
+	}
+}
+
+func (gadget Gadget) handleCommand(w http.ResponseWriter, r *http.Request) {
+	rs := newRequestState()
+	defer func() { requestLog(rs.statusCode, *r, rs.accessDenied, rs.start, rs.logger) }()
+
+	body, code, err := verifySlackRequest(w, r, gadget.signingSecret, rs.logger)
+	if err != nil {
+		rs.statusCode = code
+		return
+	}
+
+	// Restore body so SlashCommandParse can read it via ParseForm
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
+	cmd, err := slack.SlashCommandParse(r)
+	if err != nil {
+		rs.logger.Warn().Err(err).Msg("Failed to parse slash command")
+		rs.statusCode = http.StatusBadRequest
+		w.WriteHeader(rs.statusCode)
+		return
+	}
+
+	route, exists := gadget.Router.FindSlashCommandRouteByCommand(cmd.Command)
+	if !exists {
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Unknown command."}`)); err != nil {
+			rs.logger.Error().Err(err).Msg("Failed to write unknown command response")
+		}
+		return
+	}
+
+	var currentUser models.User
+	gadget.Router.DbConnection.FirstOrCreate(&currentUser, models.User{Uuid: cmd.UserID})
+
+	ctx := gadget.buildHandlerContext(rs.logger)
+
+	if !gadget.Router.Can(currentUser, route.Permissions) {
+		rs.logger.Warn().Str("user", currentUser.Uuid).Str("route", route.Name).Msg("Permission failure")
+		rs.accessDenied = true
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"response_type":"ephemeral","text":"Permission denied."}`)); err != nil {
+			rs.logger.Error().Err(err).Msg("Failed to write permission denied response")
+		}
+		denied := gadget.Router.DeniedSlashCommandRoute
+		gadget.dispatchRoute(denied.Name, rs.logger, ctx, func(c router.HandlerContext) {
+			denied.Execute(c, cmd)
+		})
+		return
+	}
+
+	rs.logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
+	if route.ImmediateResponse != nil {
+		if text := route.ImmediateResponse(); text != "" {
+			resp, err := json.Marshal(map[string]string{
+				"response_type": "ephemeral",
+				"text":          text,
+			})
+			if err != nil {
+				rs.logger.Error().Err(err).Msg("Failed to marshal immediate response")
+				rs.statusCode = http.StatusInternalServerError
+				w.WriteHeader(rs.statusCode)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if _, err := w.Write(resp); err != nil {
+				rs.logger.Error().Err(err).Msg("Failed to write immediate response")
 			}
 		}
-		cmdRoute := route // capture for closure
-		safeGo(cmdRoute.Name, logger, func() {
-			gadget.buildChain(func(c router.HandlerContext) {
-				cmdRoute.Execute(c, cmd)
-			})(ctx)
-		})
+	}
+	cmdRoute := route // capture for closure
+	gadget.dispatchRoute(cmdRoute.Name, rs.logger, ctx, func(c router.HandlerContext) {
+		cmdRoute.Execute(c, cmd)
 	})
+}
 
+// Handler returns an http.Handler with all Gadget routes registered.
+func (gadget Gadget) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/gadget", gadget.handleEvent)
+	mux.HandleFunc("/gadget/command", gadget.handleCommand)
 	return mux
 }
 
