@@ -1,6 +1,7 @@
 package gadgettest
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/gadget-bot/gadget/router"
@@ -33,8 +34,7 @@ func TestDispatchMention_MatchingRoute(t *testing.T) {
 func TestDispatchMention_NoMatch(t *testing.T) {
 	d := NewDispatcher()
 	err := d.DispatchMention(slackevents.AppMentionEvent{}, "unknown")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no matching mention route")
+	assert.True(t, errors.Is(err, ErrNoRoute))
 }
 
 func TestDispatchChannelMessage_MatchingRoute(t *testing.T) {
@@ -60,8 +60,7 @@ func TestDispatchChannelMessage_MatchingRoute(t *testing.T) {
 func TestDispatchChannelMessage_NoMatch(t *testing.T) {
 	d := NewDispatcher()
 	err := d.DispatchChannelMessage(slackevents.MessageEvent{}, "unknown")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no matching channel message route")
+	assert.True(t, errors.Is(err, ErrNoRoute))
 }
 
 func TestDispatchSlashCommand_MatchingRoute(t *testing.T) {
@@ -85,8 +84,7 @@ func TestDispatchSlashCommand_MatchingRoute(t *testing.T) {
 func TestDispatchSlashCommand_NoMatch(t *testing.T) {
 	d := NewDispatcher()
 	err := d.DispatchSlashCommand(slack.SlashCommand{Command: "/unknown"})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no matching slash command route")
+	assert.True(t, errors.Is(err, ErrNoRoute))
 }
 
 func TestWithBotClient_Available(t *testing.T) {

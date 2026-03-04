@@ -5,6 +5,7 @@ package gadgettest
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/gadget-bot/gadget/router"
 	"github.com/rs/zerolog"
@@ -12,6 +13,9 @@ import (
 	"github.com/slack-go/slack/slackevents"
 	"gorm.io/gorm"
 )
+
+// ErrNoRoute is returned when no route matches a dispatched event.
+var ErrNoRoute = errors.New("no matching route")
 
 // Dispatcher dispatches synthetic events to registered routes synchronously.
 type Dispatcher struct {
@@ -93,7 +97,7 @@ func (d *Dispatcher) ctx() router.HandlerContext {
 func (d *Dispatcher) DispatchMention(ev slackevents.AppMentionEvent, message string) error {
 	route, found := d.router.FindMentionRouteByMessage(message)
 	if !found {
-		return errors.New("no matching mention route for: " + message)
+		return fmt.Errorf("%w: %s", ErrNoRoute, message)
 	}
 	route.Execute(d.ctx(), ev, message)
 	return nil
@@ -104,7 +108,7 @@ func (d *Dispatcher) DispatchMention(ev slackevents.AppMentionEvent, message str
 func (d *Dispatcher) DispatchChannelMessage(ev slackevents.MessageEvent, message string) error {
 	route, found := d.router.FindChannelMessageRouteByMessage(message)
 	if !found {
-		return errors.New("no matching channel message route for: " + message)
+		return fmt.Errorf("%w: %s", ErrNoRoute, message)
 	}
 	route.Execute(d.ctx(), ev, message)
 	return nil
@@ -115,7 +119,7 @@ func (d *Dispatcher) DispatchChannelMessage(ev slackevents.MessageEvent, message
 func (d *Dispatcher) DispatchSlashCommand(cmd slack.SlashCommand) error {
 	route, found := d.router.FindSlashCommandRouteByCommand(cmd.Command)
 	if !found {
-		return errors.New("no matching slash command route for: " + cmd.Command)
+		return fmt.Errorf("%w: %s", ErrNoRoute, cmd.Command)
 	}
 	route.Execute(d.ctx(), cmd)
 	return nil
