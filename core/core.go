@@ -339,6 +339,7 @@ func (gadget Gadget) buildHandlerContext(logger zerolog.Logger) router.HandlerCo
 	}
 }
 
+// logger is passed separately from ctx because safeGo uses it independently for panic-recovery logging.
 func (gadget Gadget) dispatchRoute(name string, logger zerolog.Logger, ctx router.HandlerContext, fn func(router.HandlerContext)) {
 	safeGo(name, logger, func() {
 		gadget.buildChain(fn)(ctx)
