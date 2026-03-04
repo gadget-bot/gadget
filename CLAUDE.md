@@ -75,8 +75,29 @@ Environment variables: `SLACK_OAUTH_TOKEN`, `SLACK_SIGNING_SECRET`, `GADGET_GLOB
 - Static binary: `CGO_ENABLED=0`
 - Route plugin execution is always async (goroutines)
 - GORM `FirstOrCreate` pattern for safe upserts
-- Feature branch + PR merge workflow
-- NEVER force push to main
+- NEVER commit or push directly to main — always create a feature branch and open a PR
+
+## Commit Messages
+
+Follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
+
+**Breaking changes:** append `!` after the type/scope, or add `BREAKING CHANGE:` in the footer.
+
+Examples:
+- `feat(router): add priority-based route sorting`
+- `fix(core): handle missing signing secret gracefully`
+- `feat!: rename SetupWithConfig to NewBot`
+- `chore: update golangci-lint to v1.57`
 
 ## GitHub Repository
 
