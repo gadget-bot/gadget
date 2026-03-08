@@ -137,7 +137,8 @@ func newConversationListServer(t *testing.T, pages []string) slack.Client {
 }
 
 // assertConversationListTypes verifies that a conversations.list request
-// includes both public_channel and private_channel in the types parameter.
+// includes both public_channel and private_channel in the types parameter
+// and sets exclude_archived=true.
 func assertConversationListTypes(t *testing.T, r *http.Request) {
 	t.Helper()
 	if err := r.ParseForm(); err != nil {
@@ -146,6 +147,7 @@ func assertConversationListTypes(t *testing.T, r *http.Request) {
 	types := r.FormValue("types")
 	assert.Contains(t, types, "public_channel", "conversations.list must request public_channel")
 	assert.Contains(t, types, "private_channel", "conversations.list must request private_channel")
+	assert.Equal(t, "true", r.FormValue("exclude_archived"), "conversations.list must exclude archived channels")
 }
 
 // newMultiHandlerServer returns a test server that routes requests by path.
@@ -296,6 +298,23 @@ func TestFindChannelByName_FindsPrivateChannel(t *testing.T) {
 	ch, err := FindChannelByName(api, "secret-ops")
 	require.NoError(t, err)
 	assert.Equal(t, "C_PRIV", ch.ID)
+}
+
+func TestGetJoinedChannels_ExcludesArchived(t *testing.T) {
+	// Verify that GetJoinedChannels sends exclude_archived=true so the Slack
+	// API omits archived channels. assertConversationListTypes enforces this
+	// on every request made by newConversationListServer.
+	api := newConversationListServer(t, []string{emptyChannelListJSON()})
+	_, err := GetJoinedChannels(api)
+	require.NoError(t, err)
+}
+
+func TestFindChannelByName_ExcludesArchived(t *testing.T) {
+	// Verify that FindChannelByName sends exclude_archived=true so the Slack
+	// API omits archived channels. assertConversationListTypes enforces this
+	// on every request made by newConversationListServer.
+	api := newConversationListServer(t, []string{channelListJSON("C001", "general", "")})
+	_, _ = FindChannelByName(api, "general")
 }
 
 func TestGetJoinedChannels_IncludesPrivateChannels(t *testing.T) {
