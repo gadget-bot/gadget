@@ -45,6 +45,14 @@ func TestConfigFromEnv_ReadsSlackUserToken(t *testing.T) {
 	assert.Equal(t, "xoxp-from-env", cfg.SlackUserToken)
 }
 
+func TestConfigFromEnv_ReadsDBPort(t *testing.T) {
+	t.Setenv("GADGET_DB_PORT", "3307")
+
+	cfg := ConfigFromEnv()
+
+	assert.Equal(t, "3307", cfg.DBPort)
+}
+
 func TestGlobalAdminsFromString(t *testing.T) {
 	tests := []struct {
 		name     string

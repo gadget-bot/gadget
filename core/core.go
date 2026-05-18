@@ -40,6 +40,7 @@ type Config struct {
 	DBPass            string
 	DBHost            string
 	DBName            string
+	DBPort            string // optional; defaults to "3306" if empty
 	ListenPort        string
 	GlobalAdmins      []string
 	DBConnMaxLifetime time.Duration // max lifetime of a DB connection; 0 uses default (5m)
@@ -56,6 +57,7 @@ func ConfigFromEnv() Config {
 		DBPass:            os.Getenv("GADGET_DB_PASS"),
 		DBHost:            os.Getenv("GADGET_DB_HOST"),
 		DBName:            os.Getenv("GADGET_DB_NAME"),
+		DBPort:            os.Getenv("GADGET_DB_PORT"),
 		ListenPort:        os.Getenv("GADGET_LISTEN_PORT"),
 		GlobalAdmins:      globalAdminsFromString(os.Getenv("GADGET_GLOBAL_ADMINS")),
 		DBConnMaxLifetime: parseDurationEnv("GADGET_DB_CONN_MAX_LIFETIME"),
@@ -263,7 +265,11 @@ func SetupWithConfig(cfg Config) (*Gadget, error) {
 	default:
 		gormLogLevel = gormlogger.Silent
 	}
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBName)
+	dbPort := cfg.DBPort
+	if dbPort == "" {
+		dbPort = "3306"
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True", cfg.DBUser, cfg.DBPass, cfg.DBHost, dbPort, cfg.DBName)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormLogLevel),
 	})
