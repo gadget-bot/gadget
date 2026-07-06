@@ -165,7 +165,8 @@ export SLACK_SIGNING_SECRET="a...a"
 # DB Connection details
 export GADGET_DB_USER="gadgetuser"
 export GADGET_DB_PASS="secretpassword"
-export GADGET_DB_HOST="127.0.0.1:3306"
+export GADGET_DB_HOST="127.0.0.1"
+export GADGET_DB_PORT="3306" # optional; defaults to 3306
 export GADGET_DB_NAME="gadget_dev"
 # The port Gadget's webhook server listens on
 export GADGET_LISTEN_PORT="3000"
