@@ -39,6 +39,24 @@ func AddReaction(api slack.Client, channel, plugin, reaction, timestamp string) 
 }
 
 // channelTypes lists the conversation types queried by channel helpers.
+//
+// Only public and private channels are included here. Slack's
+// conversations.list API also accepts "mpim" (multi-person direct messages)
+// and "im" (1:1 direct messages), but those are intentionally excluded:
+//
+//   - The channel helpers (FindChannelByName, GetJoinedChannels) are designed
+//     for addressing named channels, not DM threads. DMs and group DMs do not
+//     have stable, human-readable names the way channels do, so including them
+//     would produce confusing matches and inflate the result set.
+//   - Most bot use cases route on channel names and mentions, not on DM
+//     conversations. Plugins that need DM context should use the Slack Events
+//     API directly rather than the conversations.list helpers.
+//   - Requesting fewer conversation types keeps pagination faster and reduces
+//     the chance of hitting Slack rate limits on large workspaces.
+//
+// If a future plugin needs DM resolution, introduce a separate, dedicated
+// helper with its own type filter rather than widening this list, so existing
+// callers continue to see only channels. See issue #128.
 var channelTypes = []string{"public_channel", "private_channel"}
 
 // FindChannelByName searches all conversations for a channel whose

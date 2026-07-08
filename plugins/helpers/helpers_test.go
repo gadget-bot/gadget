@@ -137,8 +137,8 @@ func newConversationListServer(t *testing.T, pages []string) slack.Client {
 }
 
 // assertConversationListTypes verifies that a conversations.list request
-// includes both public_channel and private_channel in the types parameter
-// and sets exclude_archived=true.
+// includes both public_channel and private_channel in the types parameter,
+// sets exclude_archived=true, and intentionally excludes mpim/im (see issue #128).
 func assertConversationListTypes(t *testing.T, r *http.Request) {
 	t.Helper()
 	if err := r.ParseForm(); err != nil {
@@ -147,6 +147,8 @@ func assertConversationListTypes(t *testing.T, r *http.Request) {
 	types := r.FormValue("types")
 	assert.Contains(t, types, "public_channel", "conversations.list must request public_channel")
 	assert.Contains(t, types, "private_channel", "conversations.list must request private_channel")
+	assert.NotContains(t, types, "mpim", "conversations.list must not request mpim (see issue #128)")
+	assert.NotContains(t, types, "im", "conversations.list must not request im (see issue #128)")
 	assert.Equal(t, "true", r.FormValue("exclude_archived"), "conversations.list must exclude archived channels")
 }
 
