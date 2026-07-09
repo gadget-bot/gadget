@@ -1,11 +1,16 @@
 package core
 
 import (
-	"reflect"
-
 	"github.com/slack-go/slack/slackevents"
 )
 
 func userFromInnerEvent(event *slackevents.EventsAPIInnerEvent) string {
-	return reflect.ValueOf(event.Data).Elem().FieldByName("User").String()
+	switch ev := event.Data.(type) {
+	case *slackevents.AppMentionEvent:
+		return ev.User
+	case *slackevents.MessageEvent:
+		return ev.User
+	default:
+		return ""
+	}
 }
