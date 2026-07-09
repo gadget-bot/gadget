@@ -1,18 +1,20 @@
-FROM golang:alpine AS builder
+FROM golang:1.25-alpine AS builder
 
-COPY . /usr/local/gadget/
+WORKDIR /build
 
-WORKDIR /usr/local/gadget/
+# Cache dependencies before copying source
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN go clean && \
-    go get && \
-    go build -ldflags "-s -w" -o dist/gadget
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o dist/gadget
 
-FROM alpine
+FROM alpine:3.20
 
-COPY --from=builder /usr/local/gadget/dist/gadget /usr/local/bin/gadget
+RUN apk add --no-cache ca-certificates && \
+    adduser -D -s /bin/nologin -H -u 1000 gadget
 
-RUN adduser -D -s /bin/nologin -H -u 1000 gadget
+COPY --from=builder /build/dist/gadget /usr/local/bin/gadget
 
 USER gadget
 
