@@ -3,6 +3,7 @@ package core
 import (
 	"testing"
 
+	"github.com/slack-go/slack/slackevents"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -70,6 +71,67 @@ func TestGlobalAdminsFromString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := globalAdminsFromString(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestUserFromInnerEvent(t *testing.T) {
+	tests := []struct {
+		name     string
+		event    *slackevents.EventsAPIInnerEvent
+		expected string
+	}{
+		{
+			name: "AppMentionEvent",
+			event: &slackevents.EventsAPIInnerEvent{
+				Data: &slackevents.AppMentionEvent{
+					User: "U123",
+				},
+			},
+			expected: "U123",
+		},
+		{
+			name: "MessageEvent",
+			event: &slackevents.EventsAPIInnerEvent{
+				Data: &slackevents.MessageEvent{
+					User: "U456",
+				},
+			},
+			expected: "U456",
+		},
+		{
+			name: "ChannelCreatedEvent",
+			event: &slackevents.EventsAPIInnerEvent{
+				Data: &slackevents.ChannelCreatedEvent{
+					Channel: slackevents.ChannelCreatedInfo{
+						Name: "U789",
+					},
+				},
+			},
+			expected: "",
+		},
+		{
+			name: "FileDeletedEvent",
+			event: &slackevents.EventsAPIInnerEvent{
+				Data: slackevents.FileDeletedEvent{
+					FileID: "F123",
+				},
+			},
+			expected: "",
+		},
+		{
+			name: "UnsupportedEvent",
+			event: &slackevents.EventsAPIInnerEvent{
+				Data: struct{}{},
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := userFromInnerEvent(tt.event)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
