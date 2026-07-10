@@ -3,7 +3,7 @@ module github.com/gadget-bot/gadget
 go 1.25
 
 require (
-	github.com/rs/zerolog v1.34.0
+	github.com/rs/zerolog v1.35.1
 	github.com/slack-go/slack v0.18.0
 	github.com/stretchr/testify v1.11.1
 	gorm.io/driver/mysql v1.6.0
