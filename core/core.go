@@ -296,8 +296,11 @@ func SetupWithConfig(cfg Config) (*Gadget, error) {
 	log.Debug().Int("maxOpenConns", 10).Int("maxIdleConns", 5).Msg("DB connection pool configured")
 
 	var version string
-	db.Raw("SELECT VERSION() as version").Scan(&version)
-	log.Debug().Str("version", version).Msg("Connected to DB")
+	if err := db.Raw("SELECT VERSION() as version").Scan(&version).Error; err != nil {
+		log.Warn().Err(err).Msg("Failed to query DB version")
+	} else {
+		log.Debug().Str("version", version).Msg("Connected to DB")
+	}
 
 	gadget.Router.DbConnection = db
 	if err := gadget.Router.SetupDb(); err != nil {
