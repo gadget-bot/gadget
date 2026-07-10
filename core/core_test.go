@@ -76,7 +76,7 @@ func TestGlobalAdminsFromString(t *testing.T) {
 	}
 }
 
-func TestUnsupportedEventType(t *testing.T) {
+func TestUserFromInnerEvent(t *testing.T) {
 	tests := []struct {
 		name     string
 		event    *slackevents.EventsAPIInnerEvent
@@ -131,10 +131,8 @@ func TestUnsupportedEventType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := userFromInnerEvent(tt.event)
-			if got != tt.expected {
-				t.Errorf("got: %q, want: %q", got, tt.expected)
-			}
+			result := userFromInnerEvent(tt.event)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
