@@ -99,6 +99,20 @@ Examples:
 - `feat!: rename SetupWithConfig to NewBot`
 - `chore: update golangci-lint to v1.57`
 
+## Releasing
+
+Gadget is consumed by other repos (Penny, gadget-plugin-*) via `go get`/`go.mod`, which resolves against git tags — not GitHub Releases. Publishing a Release is what makes a version visible/discoverable to humans browsing the repo.
+
+To cut a release:
+
+1. Ensure `main` is in the state you want to release.
+2. Tag it following semver, based on the conventional-commit types merged since the last tag: `fix`/`chore`/`docs`/etc → patch, `feat` → minor, anything with `!` or a `BREAKING CHANGE:` footer → major.
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+3. The `.github/workflows/release.yml` workflow triggers on the tag push and automatically publishes a GitHub Release with auto-generated notes (`gh release create --generate-notes`) — no further action needed.
+
 ## GitHub Repository
 
 The origin repository is `gadget-bot/gadget`. Always use this owner/repo when querying GitHub for issues, milestones, pull requests, or other repository details.
