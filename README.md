@@ -149,6 +149,66 @@ func main() {
 
 That's it! The above actually _is_ a real plugin and lives in its [own repo](https://github.com/gadget-bot/gadget-plugin-dice). PRs welcome!
 
+## Slash Commands
+
+Gadget also supports Slack [slash commands](https://api.slack.com/interactivity/slash-commands) via `router.SlashCommandRoute`, which provides the same `Route` fields (`Name`, `Permissions`, `Help`, `Description`, `Priority`) plus:
+
+* `Command` (a `string`, e.g. `"/deploy"`) — the slash command this route handles
+* `ImmediateResponse` (a `func() string`, optional) — evaluated per-request to return an ephemeral acknowledgment shown to the user immediately; `nil` means no immediate response
+* `Plugin`, which must look like:
+```golang
+func(ctx router.HandlerContext, cmd slack.SlashCommand) {
+  // ... do something awesome here ...
+}
+```
+
+Slash command plugins run asynchronously in a goroutine, same as mention and channel message routes — the HTTP handler acknowledges Slack's request with an empty 200 within its 3-second deadline. If your plugin needs to send a visible response, post a follow-up message using `ctx.BotClient` (e.g. `chat.postMessage`) or the command's `ResponseURL`.
+
+Register slash command routes with `myBot.Router.AddSlashCommandRoute()` / `AddSlashCommandRoutes()`, mirroring the mention/channel-message registration API.
+
+## Middleware
+
+Gadget supports request-scoped middleware for cross-cutting concerns like logging, metrics, or auth checks that should run around every route dispatch:
+
+```golang
+type Middleware func(ctx router.HandlerContext, next func(router.HandlerContext))
+```
+
+Register middleware with `myBot.Use()`. Middleware runs in the order added, wrapping the eventual route handler; call `next(ctx)` to continue the chain, or return without calling it to short-circuit (e.g. to deny a request):
+
+```golang
+myBot.Use(func(ctx router.HandlerContext, next func(router.HandlerContext)) {
+	ctx.Logger.Info().Str("route", ctx.Route.Name).Msg("dispatching")
+	next(ctx)
+})
+```
+
+## Generating a Slack App Manifest
+
+Gadget can generate a [Slack app manifest](https://api.slack.com/reference/manifests) from your bot's currently registered routes, inferring event subscriptions and slash commands automatically:
+
+```golang
+m := myBot.Manifest("My Bot", "A bot that does things", "https://example.com/gadget", "extra:scope")
+json, err := m.JSON()
+```
+
+Call `Manifest()` after all routes have been registered — it operates on the routes present at call time, so routes added afterward won't be reflected. Pass any additional OAuth scopes your plugins need but that can't be inferred from route registrations via `extraScopes`.
+
+## Testing Plugins with `gadgettest`
+
+The `gadgettest` package (`github.com/gadget-bot/gadget/gadgettest`) provides a `Dispatcher` for exercising route handlers synchronously in tests, without standing up a database, HTTP server, or Slack signature verification:
+
+```golang
+d := gadgettest.NewDispatcher(
+	gadgettest.WithMentionRoutes(dice.GetMentionRoutes()...),
+	gadgettest.WithBotClient(mockSlackClient),
+)
+
+err := d.DispatchMention(ev, "roll some dice")
+```
+
+`NewDispatcher` accepts functional options — `WithBotClient`, `WithUserClient`, `WithDB`, `WithLogger`, `WithMentionRoutes`, `WithChannelMessageRoutes`, and `WithSlashCommandRoutes` — to configure exactly what a given test needs. `DispatchMention`, `DispatchChannelMessage`, and `DispatchSlashCommand` each find the matching route and execute it directly, returning `gadgettest.ErrNoRoute` (wrapped with the unmatched message/command) if nothing matches. Note that route permissions are **not** enforced by the dispatcher — it calls the handler directly, bypassing `Router.Can()`.
+
 ## Starting a Demo
 
 If you just want to try Gadget out, you can use the `main.go` in this repo like this:
