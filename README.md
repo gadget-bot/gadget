@@ -170,6 +170,8 @@ export GADGET_DB_PORT="3306" # optional; defaults to 3306
 export GADGET_DB_NAME="gadget_dev"
 # The port Gadget's webhook server listens on
 export GADGET_LISTEN_PORT="3000"
+# Optional; max time to drain in-flight requests on SIGINT/SIGTERM before forcing shutdown (default 10s)
+export GADGET_SHUTDOWN_TIMEOUT="10s"
 
 go run .
 ```

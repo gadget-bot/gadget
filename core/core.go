@@ -2,16 +2,21 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gadget-bot/gadget/manifest"
@@ -45,6 +50,7 @@ type Config struct {
 	GlobalAdmins      []string
 	DBConnMaxLifetime time.Duration // max lifetime of a DB connection; 0 uses default (5m)
 	DBConnMaxIdleTime time.Duration // max idle time of a DB connection; 0 uses default (3m)
+	ShutdownTimeout   time.Duration // max time to wait for in-flight requests to drain on shutdown; 0 uses default (10s)
 }
 
 // ConfigFromEnv returns a Config populated from environment variables.
@@ -62,6 +68,7 @@ func ConfigFromEnv() Config {
 		GlobalAdmins:      globalAdminsFromString(os.Getenv("GADGET_GLOBAL_ADMINS")),
 		DBConnMaxLifetime: parseDurationEnv("GADGET_DB_CONN_MAX_LIFETIME"),
 		DBConnMaxIdleTime: parseDurationEnv("GADGET_DB_CONN_MAX_IDLE_TIME"),
+		ShutdownTimeout:   parseDurationEnv("GADGET_SHUTDOWN_TIMEOUT"),
 	}
 }
 
@@ -85,12 +92,13 @@ func parseDurationEnv(key string) time.Duration {
 type Middleware func(ctx router.HandlerContext, next func(router.HandlerContext))
 
 type Gadget struct {
-	Router        router.Router
-	Client        *slack.Client
-	UserClient    *slack.Client // nil if no user token configured
-	signingSecret string
-	listenPort    string
-	middleware    []Middleware
+	Router          router.Router
+	Client          *slack.Client
+	UserClient      *slack.Client // nil if no user token configured
+	signingSecret   string
+	listenPort      string
+	middleware      []Middleware
+	shutdownTimeout time.Duration
 }
 
 func requestLog(code int, r http.Request, denied bool, start time.Time, logger zerolog.Logger) {
@@ -243,6 +251,7 @@ func SetupWithConfig(cfg Config) (*Gadget, error) {
 	}
 	gadget.signingSecret = cfg.SigningSecret
 	gadget.listenPort = cfg.ListenPort
+	gadget.shutdownTimeout = cfg.ShutdownTimeout
 
 	log.Debug().Str("globalAdmins", strings.Join(cfg.GlobalAdmins, ", ")).Msg("Pulled globalAdmins")
 
@@ -538,16 +547,66 @@ func (gadget Gadget) Handler() http.Handler {
 	return mux
 }
 
+// Run starts the HTTP server and blocks until it exits. It listens for
+// SIGINT/SIGTERM and, on receipt, performs a graceful shutdown: in-flight
+// requests are given up to the configured ShutdownTimeout (default 10s,
+// via GADGET_SHUTDOWN_TIMEOUT) to complete before the server stops.
 func (gadget Gadget) Run() error {
-	handler := gadget.Handler()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	return gadget.RunWithContext(ctx)
+}
+
+// RunWithContext starts the HTTP server and blocks until either it fails or
+// ctx is done, at which point it performs the same graceful shutdown as Run.
+// It's exposed separately from Run so callers (and tests) can trigger
+// shutdown without needing to send the process an OS signal.
+func (gadget Gadget) RunWithContext(ctx context.Context) error {
 	port := gadget.getListenPort()
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
+	if err != nil {
+		return fmt.Errorf("listen on port %s: %w", port, err)
+	}
+	return gadget.serve(ctx, ln, gadget.Handler())
+}
+
+// serve runs an HTTP server with the given handler on ln until ctx is done,
+// then gracefully shuts it down. Split out from RunWithContext so tests can
+// supply a listener bound to an ephemeral port and a synthetic handler to
+// exercise shutdown timing without needing a real Slack request.
+func (gadget Gadget) serve(ctx context.Context, ln net.Listener, handler http.Handler) error {
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%s", port),
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	log.Info().Str("port", port).Msg("Server listening")
-	return srv.ListenAndServe()
+
+	errCh := make(chan error, 1)
+	go func() {
+		log.Info().Str("addr", ln.Addr().String()).Msg("Server listening")
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		log.Info().Msg("Shutdown signal received, draining in-flight requests")
+		timeout := gadget.shutdownTimeout
+		if timeout == 0 {
+			timeout = 10 * time.Second
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("graceful shutdown: %w", err)
+		}
+		log.Info().Msg("Server shut down cleanly")
+		return nil
+	}
 }
