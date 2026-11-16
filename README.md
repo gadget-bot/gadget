@@ -154,7 +154,7 @@ That's it! The above actually _is_ a real plugin and lives in its [own repo](htt
 Gadget also supports Slack [slash commands](https://api.slack.com/interactivity/slash-commands) via `router.SlashCommandRoute`, which provides the same `Route` fields (`Name`, `Permissions`, `Help`, `Description`, `Priority`) plus:
 
 * `Command` (a `string`, e.g. `"/deploy"`) — the slash command this route handles
-* `ImmediateResponse` (a `func(slack.SlashCommand) string`, optional) — evaluated per-request to return an ephemeral acknowledgment shown to the user immediately; the function receives the incoming slash command (`UserID`, `ChannelID`, `Text`, etc.), so the response can vary with the invoking user, channel, or command arguments; `nil` means no immediate response
+* `ImmediateResponse` (a `func(slack.SlashCommand) string`, optional) — evaluated per-request to return an ephemeral acknowledgment shown to the user immediately; the function receives the incoming slash command (`UserID`, `ChannelID`, `Text`, etc.), so the response can vary with the invoking user, channel, or command arguments; `nil` means no immediate response. It runs synchronously inside the HTTP handler, so keep it fast and free of panics (a panic aborts the request before your plugin is dispatched). The acknowledgment is only visible to the invoking user, but it is still rendered as Slack mrkdwn — avoid echoing untrusted input such as `cmd.Text` verbatim, since link syntax like `<url|label>` would be interpreted
 * `Plugin`, which must look like:
 ```golang
 func(ctx router.HandlerContext, cmd slack.SlashCommand) {
