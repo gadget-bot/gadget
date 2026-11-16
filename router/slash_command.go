@@ -10,8 +10,10 @@ import "github.com/slack-go/slack"
 // or the slash command's ResponseURL).
 type SlashCommandRoute struct {
 	Route
-	Command           string        // Slack command name, e.g. "/deploy"
-	ImmediateResponse func() string // Optional ephemeral response evaluated per-request; nil means no response
+	Command string // Slack command name, e.g. "/deploy"
+	// Optional ephemeral response evaluated per-request; nil means no response.
+	// The function receives the incoming slash command (UserID, ChannelID, Text, etc.).
+	ImmediateResponse func(slack.SlashCommand) string
 	Plugin            func(ctx HandlerContext, cmd slack.SlashCommand)
 }
 
