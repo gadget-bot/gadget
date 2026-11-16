@@ -516,7 +516,7 @@ func (gadget Gadget) handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	rs.logger.Debug().Str("user", currentUser.Uuid).Str("route", route.Name).Str("command", cmd.Command).Msg("Slash command")
 	if route.ImmediateResponse != nil {
-		if text := route.ImmediateResponse(); text != "" {
+		if text := route.ImmediateResponse(cmd); text != "" {
 			resp, err := json.Marshal(map[string]string{
 				"response_type": "ephemeral",
 				"text":          text,

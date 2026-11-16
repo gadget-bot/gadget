@@ -27,16 +27,26 @@ func TestSlashCommandRoute_Execute(t *testing.T) {
 }
 
 func TestSlashCommandRoute_ImmediateResponse(t *testing.T) {
+	cmd := slack.SlashCommand{
+		Command: "/deploy",
+		UserID:  "U123456",
+		Text:    "production",
+	}
 	route := SlashCommandRoute{
 		Route: Route{
 			Name:        "deploy",
 			Description: "Deploy the app",
 		},
-		Command:           "/deploy",
-		ImmediateResponse: func() string { return "Deploying..." },
+		Command: "/deploy",
+		ImmediateResponse: func(c slack.SlashCommand) string {
+			assert.Equal(t, "/deploy", c.Command)
+			assert.Equal(t, "U123456", c.UserID)
+			assert.Equal(t, "production", c.Text)
+			return "Deploying..."
+		},
 		Plugin: func(ctx HandlerContext, cmd slack.SlashCommand) {
 		},
 	}
 
-	assert.Equal(t, "Deploying...", route.ImmediateResponse())
+	assert.Equal(t, "Deploying...", route.ImmediateResponse(cmd))
 }
