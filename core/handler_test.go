@@ -503,6 +503,54 @@ func TestCommandHandler_ValidCommandCallsPlugin(t *testing.T) {
 	}
 }
 
+func TestCommandHandler_ImmediateResponseReceivesCommand(t *testing.T) {
+	g := newTestGadget(t)
+
+	pluginCalled := make(chan struct{})
+	g.Router.AddSlashCommandRoute(router.SlashCommandRoute{
+		Route: router.Route{
+			Name:        "deploy",
+			Description: "Deploy the app",
+		},
+		Command: "/deploy",
+		ImmediateResponse: func(cmd slack.SlashCommand) string {
+			assert.Equal(t, "/deploy", cmd.Command)
+			assert.Equal(t, "U123", cmd.UserID)
+			assert.Equal(t, "production", cmd.Text)
+			return "Deploying " + cmd.Text + "..."
+		},
+		Plugin: func(ctx router.HandlerContext, cmd slack.SlashCommand) {
+			close(pluginCalled)
+		},
+	})
+
+	handler := g.Handler()
+
+	formData := url.Values{
+		"command": {"/deploy"},
+		"user_id": {"U123"},
+		"text":    {"production"},
+	}
+	body := formData.Encode()
+
+	req := httptest.NewRequest(http.MethodPost, "/gadget/command", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	signRequest(req, body)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+	assert.JSONEq(t, `{"response_type":"ephemeral","text":"Deploying production..."}`, rr.Body.String())
+
+	select {
+	case <-pluginCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for command plugin to be called")
+	}
+}
+
 func TestSafeGo_RecoversPanic(t *testing.T) {
 	var buf bytes.Buffer
 	logged := make(chan struct{})
