@@ -1,10 +1,10 @@
 module github.com/gadget-bot/gadget
 
-go 1.25
+go 1.26
 
 require (
 	github.com/rs/zerolog v1.35.1
-	github.com/slack-go/slack v0.29.0
+	github.com/slack-go/slack v0.35.0
 	github.com/stretchr/testify v1.12.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/sqlite v1.6.0
